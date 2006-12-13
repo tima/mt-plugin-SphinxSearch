@@ -43,8 +43,8 @@ sub sphinx_search {
     foreach my $match (@{$results->{matches}}) {
         my $id = $match->{doc};
         my $o;
-        if ($id > 2**16) {
-            $o = MT::Comment->load ($id - 2**16);
+        if ($id > 10000000) {
+            $o = MT::Comment->load ($id - 10000000);
         }
         else {
             $o = MT::Entry->load ($id);
