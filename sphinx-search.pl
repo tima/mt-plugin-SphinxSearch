@@ -54,14 +54,7 @@ sub sphinx_indexer_task {
         return;
     }
     my $indexer_binary = File::Spec->catdir ($sphinx_path, 'indexer');
-    if (system ($indexer_binary, '--config', $sphinx_conf, '--all')) {
-        my $app = MT->instance;
-        if ($? == -1) {
-            $app->log ("Sphinx indexer failed to execute: $!");
-        }
-        else {
-            my $msg = sprintf "Sphinx indexer exited with value %d", $? >> 8;
-            $app->log ($msg);
-        }
-    }
+    my $str = `$indexer_binary --quiet --config $sphinx_conf --all`;
+    die $str if ($str);
+    1;
 }
