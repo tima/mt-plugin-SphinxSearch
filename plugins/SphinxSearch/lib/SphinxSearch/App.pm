@@ -4,20 +4,14 @@ package SphinxSearch::App;
 use strict;
 use warnings;
 
-use base qw( MT::App );
+use base qw( MT::App::Search );
 
 use Sphinx;
 use Data::Dumper;
 
-sub init {
-    my $app = shift;
-    $app->SUPER::init (@_) or return;
-
-    $app->add_methods (
-            sphinx_search   => \&sphinx_search,
-            );
-    $app->{ default_mode } = 'sphinx_search';
-    $app;
+{
+    local $SIG{__WARN__} = sub { };
+    *MT::App::Search::_straight_search = \&_straight_sphinx_search;
 }
 
 sub _get_sphinx {
@@ -27,34 +21,26 @@ sub _get_sphinx {
     return $spx;
 }
 
-sub sphinx_search {
+sub _straight_sphinx_search {
     my $app = shift;
+    return 1 unless $app->{search_string} =~ /\S/;
 
     my $spx = _get_sphinx;
 
-    my $search_keyword = $app->param ('keyword');
+    my $search_keyword = $app->{search_string};
     my $results = $spx->Query ($search_keyword);
+    return 1 unless ($results);
 
     require MT::Entry;
-    require MT::Comment;
-    
-    my $out = '';
-    
+
     foreach my $match (@{$results->{matches}}) {
         my $id = $match->{doc};
-        my $o;
-        if ($id > 10000000) {
-            $o = MT::Comment->load ($id - 10000000);
-        }
-        else {
-            $o = MT::Entry->load ($id);
-        }
+        next if ($id > 10000000);
+        my $o = MT::Entry->load ($id);
         
-        $out .= "<pre>".Dumper ($o)."</pre>\n";
-        $out .= "<hr />\n";
+        $app->_store_hit_data ($o->blog, $o);
     }
-
-    return $out;
+    1;
 }
 
 1;
