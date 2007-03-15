@@ -28,7 +28,7 @@ sub _straight_sphinx_search {
     my $spx = _get_sphinx;
 
     my $search_keyword = $app->{search_string};
-    my $results = $spx->Query ($search_keyword);
+    my $results = $spx->Query ($search_keyword,'entry_index');
     return 1 unless ($results);
 
     require MT::Entry;
