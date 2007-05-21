@@ -1,4 +1,4 @@
-<div class="setting">
+<div class="setting grouped">
 <div class="label"><label for="sphinx_path">Sphinx Path:</label></div>
 <div class="field"><input type="text" name="sphinx_path" value="<TMPL_VAR NAME=SPHINX_PATH>" />
 	<p>The installed path for the sphinx binaries.</p>
@@ -11,4 +11,14 @@
 	<input type="text" name="sphinx_conf_path" value="<TMPL_VAR NAME=SPHINX_CONF_PATH>" />
 	<p>Full path for the sphinx.conf file.</p>
 </div>
+</div>
+
+<div class="setting grouped">
+    <div class="label"><label for="searchd_host">Searchd Host:</label></div>
+    <div class="field"><input type="text" name="searchd_host" id="searchd_host" value="<TMPL_VAR NAME=SEARCHD_HOST>" /></div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="searchd_port">Searchd Port:</label></div>
+    <div class="field"><input type="text" name="searchd_port" id="searchd_port" value="<TMPL_VAR NAME=SEARCHD_PORT>" /></div>
 </div>
