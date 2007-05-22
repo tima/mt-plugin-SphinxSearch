@@ -106,6 +106,7 @@ sub straight_sphinx_search {
     my $spx = _get_sphinx;
 
     my $search_keyword = $app->{search_string};
+    $spx->SetGroups ([ keys %{$app->{searchparam}{IncludeBlogs}} ]);
     my $results = $spx->Query ($search_keyword,'entry_index');
     if (!$results) {
         $app->log ({
