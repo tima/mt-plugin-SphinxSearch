@@ -124,11 +124,18 @@ sub straight_sphinx_search {
         my $id = $match->{doc};
         next if ($id > 10000000);
         my $o = MT::Entry->load ($id);
+        my $blog_id = $o->blog_id;
                 
-        next if ($app->{searchparam}{IncludeBlogs} && !exists $app->{searchparam}{IncludeBlogs}{$o->blog_id});
-        next if $hits{$o->blog_id} && $hits{$o->blog_id} >= $max;
+        next if ($app->{searchparam}{IncludeBlogs} && !exists $app->{searchparam}{IncludeBlogs}{$blog_id});
+        if ($hits{$blog_id} && $hits{$blog_id} >= $max) {
+            my $blog = $blogs{$blog_id} || MT::Blog->load($blog_id);
+            my @res = @{ $app->{results}{$blog->name} };
+            my $count = $#res;
+            $res[$count]{maxresults} = $max;
+            next;
+        }
         
-        $app->_store_hit_data ($o->blog, $o, $hits{$o->blog_id});
+        $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
     }
     1;
 }
