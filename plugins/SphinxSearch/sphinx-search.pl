@@ -130,7 +130,6 @@ sub straight_sphinx_search {
     my $max = $app->{searchparam}{MaxResults};
     foreach my $match (@{$results->{matches}}) {
         my $id = $match->{doc};
-        next if ($id > 10000000);
         my $o = MT::Entry->load ($id) or next;
         my $blog_id = $o->blog_id;
                 
