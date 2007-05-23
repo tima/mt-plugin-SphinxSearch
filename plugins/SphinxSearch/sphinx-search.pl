@@ -39,6 +39,13 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         init_app    => {
             'MT::App::Search'   => \&init_search_app,
         },
+        
+        app_methods => {
+            'MT::App::CMS'  => {
+                'gen_sphinx_conf'  => \&gen_sphinx_conf,
+            },
+        },
+        
 
 });
 MT->add_plugin ($plugin);
@@ -141,5 +148,23 @@ sub straight_sphinx_search {
     1;
 }
 
+sub gen_sphinx_conf {
+    my $app = shift;
+    
+    my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl');
+    my %params;
+    
+    $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
+    
+    $params{ db_host } = $app->{cfg}->DBHost;
+    $params{ db_user } = $app->{cfg}->DBUser;
+    $params{ db_pass } = $app->{cfg}->DBPassword;
+    $params{  db_db  } = $app->{cfg}->Database;
+    
+    $app->{no_print_body} = 1;
+    $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
+    $app->send_http_header ('text/plain');
+    $app->print ($app->build_page ($tmpl, \%params));
+}
 
 1;
