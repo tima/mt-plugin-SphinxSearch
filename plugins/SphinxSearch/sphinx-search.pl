@@ -11,7 +11,7 @@ use Sphinx;
 use File::Spec;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.4';
+$VERSION = '0.5';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -36,9 +36,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             }
         },
         
-        init_app    => {
-            'MT::App::Search'   => \&init_search_app,
-        },
+        init_app    => \&init_apps,
         
         app_methods => {
             'MT::App::CMS'  => {
@@ -49,6 +47,12 @@ $plugin = MT::Plugin::SphinxSearch->new ({
 
 });
 MT->add_plugin ($plugin);
+
+sub instance {
+    $plugin;
+}
+
+my %indexes;
 
 sub sphinx_indexer_task {
     my $task = shift;
@@ -73,10 +77,25 @@ sub sphinx_indexer_task {
     1;
 }
 
+sub init_apps {
+    my $plugin = shift;
+    my ($app) = @_;
+
+    require MT::Entry;
+    require MT::Comment;
+    $plugin->sphinx_init ('MT::Entry', select_values => { status => MT::Entry::RELEASE });
+    $plugin->sphinx_init ('MT::Comment', select_values => { visible => 1 });
+    
+    if ($app->isa ('MT::App::Search')) {
+        $plugin->init_search_app ($app);
+    }
+}
+
+
 sub init_search_app {
     my $plugin = shift;
     my ($app) = @_;
-    
+        
     {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
@@ -159,11 +178,61 @@ sub gen_sphinx_conf {
     $params{ db_user } = $app->{cfg}->DBUser;
     $params{ db_pass } = $app->{cfg}->DBPassword;
     $params{  db_db  } = $app->{cfg}->Database;
+    $params{ tmp } = $app->{cfg}->TempDir;
+ 
+    my %info_query;
+    my %query;
+    foreach my $source (keys %indexes) {
+        $query{$source} = "SELECT " . join(", ", map { $source . '_' . $_ } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . " FROM mt_$source";
+        if (my $sel_values = $indexes{$source}->{select_values}) {
+            $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
+        }
+        $info_query{$source} = "SELECT * from mt_$source where ${source}_" . $indexes{$source}->{ id_column } . ' = $id';
+    }
+    $params{ source_loop } = [
+        map {
+                {
+                 source => $_,
+                 query  => $query{$_},
+                 info_query => $info_query{$_},
+                 group_column    => $indexes{$_}->{group_columns}->[0],    
+                } 
+        }
+        keys %indexes
+    ];
     
     $app->{no_print_body} = 1;
     $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
     $app->send_http_header ('text/plain');
     $app->print ($app->build_page ($tmpl, \%params));
 }
+
+sub sphinx_init {
+    my $plugin = shift;
+    my ($class, %params) = @_;
+    
+    my $datasource = $class->datasource;
+
+    return if (exists $indexes{ $datasource });
+    
+    my $props = $class->properties;
+
+    my $primary_key = $props->{primary_key};
+    my $defs = $class->column_defs;
+    $indexes{ $datasource } = {
+        id_column   => $primary_key,
+        columns     => [ grep { $_ ne $primary_key } keys %$defs ],
+    };
+    
+    if (exists $defs->{ blog_id }) {
+        $indexes{ $datasource }->{group_columns} = [ 'blog_id' ];
+    }
+    
+    if (exists $params{select_values}) {
+        $indexes{ $datasource }->{select_values} = $params{select_values};
+    }    
+}
+
+
 
 1;

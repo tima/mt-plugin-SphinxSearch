@@ -1,3 +1,30 @@
+<TMPL_LOOP NAME=SOURCE_LOOP>
+source <TMPL_VAR NAME=SOURCE>_source
+{
+    type    = mysql
+	strip_html	= 0
+	index_html_attrs	=
+	sql_host			= <TMPL_VAR NAME=DB_HOST>
+	sql_user			= <TMPL_VAR NAME=DB_USER>
+	sql_pass			= <TMPL_VAR NAME=DB_PASS>
+	sql_db				= <TMPL_VAR NAME=DB_DB>
+	sql_port			= 3306				# optional, default is 3306
+
+    sql_query           = <TMPL_VAR NAME=QUERY>
+
+<TMPL_IF NAME=GROUP_COLUMN>    sql_group_column    = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN></TMPL_IF>
+    sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
+    
+}
+
+index <TMPL_VAR NAME=SOURCE>_index
+{
+	source			= <TMPL_VAR NAME=SOURCE>_source
+	path			= <TMPL_VAR NAME=TMP>/<TMPL_VAR NAME=SOURCE>_index
+}
+
+</TMPL_LOOP>
+<TMPL_UNLESS NAME=SOURCE_LOOP>
 #
 # sphinx configuration file sample
 #
@@ -202,6 +229,7 @@ index comment_index
 #	agent_query_timeout		= 3000
 #}
 
+</TMPL_UNLESS>
 #############################################################################
 ## indexer settings
 #############################################################################
