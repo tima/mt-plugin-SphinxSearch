@@ -17,6 +17,11 @@ source <TMPL_VAR NAME=SOURCE>_source
     sql_group_column    = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN>
 </TMPL_LOOP>
 </TMPL_IF>
+<TMPL_IF NAME=DATE_LOOP>
+<TMPL_LOOP NAME=DATE_LOOP>
+    sql_date_column     = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=DATE_COLUMN>
+</TMPL_LOOP>
+</TMPL_IF>
     sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
     
 }
