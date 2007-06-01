@@ -83,7 +83,7 @@ sub sphinx_indexer_task {
         return;
     }
     my $indexer_binary = File::Spec->catdir ($sphinx_path, 'indexer');
-    my $str = `$indexer_binary --quiet --config $sphinx_conf --all`;
+    my $str = `$indexer_binary --quiet --config $sphinx_conf --all --rotate`;
     die $str if ($str);
     1;
 }
