@@ -11,7 +11,7 @@ use Sphinx;
 use File::Spec;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.5';
+$VERSION = '0.6';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
