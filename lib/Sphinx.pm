@@ -16,14 +16,21 @@ package Sphinx;
 use strict;
 use Carp;
 use Socket;
-use Data::Dumper;
+use base 'Exporter';
+
+# Constants to export.
+our @EXPORT = qw(	
+		SPH_MATCH_ALL SPH_MATCH_ANY SPH_MATCH_PHRASE SPH_MATCH_BOOLEAN
+		SPH_SORT_RELEVANCE SPH_SORT_ATTR_DESC SPH_SORT_ATTR_ASC SPH_SORT_TIME_SEGMENTS
+		SPH_GROUPBY_DAY SPH_GROUPBY_WEEK SPH_GROUPBY_MONTH SPH_GROUPBY_YEAR SPH_GROUPBY_ATTR
+		);
 
 # known searchd commands
 use constant SEARCHD_COMMAND_SEARCH	=> 0;
 use constant SEARCHD_COMMAND_EXCERPT	=> 1;
 
 # current client-side command implementation versions
-use constant VER_COMMAND_SEARCH		=> 0x101;
+use constant VER_COMMAND_SEARCH		=> 0x104;
 use constant VER_COMMAND_EXCERPT	=> 0x100;
 
 # known searchd status codes
@@ -39,9 +46,20 @@ use constant SPH_MATCH_BOOLEAN		=> 3;
 
 # known sort modes
 use constant SPH_SORT_RELEVANCE		=> 0;
-use constant SPH_SORT_DATE_DESC		=> 1;
-use constant SPH_SORT_DATE_ASC		=> 2;
+use constant SPH_SORT_ATTR_DESC		=> 1;
+use constant SPH_SORT_ATTR_ASC		=> 2;
 use constant SPH_SORT_TIME_SEGMENTS	=> 3;
+
+# known attribute types
+use constant SPH_ATTR_INTEGER		=> 1;
+use constant SPH_ATTR_TIMESTAMP		=> 2;
+
+# known grouping functions
+use constant SPH_GROUPBY_DAY		=> 0;
+use constant SPH_GROUPBY_WEEK		=> 1;
+use constant SPH_GROUPBY_MONTH		=> 2;
+use constant SPH_GROUPBY_YEAR		=> 3;
+use constant SPH_GROUPBY_ATTR		=> 4;
 
 
 #-------------------------------------------------------------
@@ -58,14 +76,16 @@ sub new {
 		_limit		=> 20,
 		_mode		=> SPH_MATCH_ALL,
 		_weights	=> [],
-		_groups		=> [],
 		_sort		=> SPH_SORT_RELEVANCE,
+		_sortby		=> "",
 		_min_id		=> 0,
 		_max_id		=> 0xFFFFFFFF,
-		_min_ts		=> 0,
-		_max_ts		=> 0xFFFFFFFF,
-		_min_gid	=> 0,
-		_max_gid	=> 0xFFFFFFFF,
+		_min		=> {},
+		_max		=> {},
+		_filter		=> {},
+		_groupby	=> "",
+		_groupfunc	=> SPH_GROUPBY_DAY,
+		_maxmatches	=> 1000,
 		_error		=> '',
 		_warning	=> '',
 	};
@@ -189,10 +209,14 @@ sub SetLimits {
         my $self = shift;
         my $offset = shift;
         my $limit = shift;
+	my $max = shift || 0;
         croak("offset should be an integer >= 0") unless ($offset =~ /^\d+$/ && $offset >= 0) ;
         croak("limit should be an integer >= 0") unless ($limit =~ /^\d+/ && $offset >= 0);
         $self->{_offset} = $offset;
         $self->{_limit}  = $limit;
+	if($max > 0) {
+		$self->{_maxmatches} = $max;
+	}
 }
 
 # set match mode
@@ -207,11 +231,14 @@ sub SetMatchMode {
 # set sort mode
 sub SetSortMode {
         my $self = shift;
-        my $sort = shift;
-        croak("Sort mode not defined") unless defined($sort);
-        croak("Unknown sort mode: $sort") unless ( $sort==SPH_SORT_RELEVANCE || $sort==SPH_SORT_DATE_DESC ||
-                                                        $sort==SPH_SORT_DATE_ASC || $sort==SPH_SORT_TIME_SEGMENTS );
-        $self->{_sort} = $sort;
+        my $mode = shift;
+	my $sortby = shift;
+        croak("Sort mode not defined") unless defined($mode);
+        croak("Unknown sort mode: $mode") unless ( $mode==SPH_SORT_RELEVANCE || $mode==SPH_SORT_ATTR_DESC ||
+                                                        $mode==SPH_SORT_ATTR_ASC || $mode==SPH_SORT_TIME_SEGMENTS );
+	croak("Sortby must be defined") unless ($mode==SPH_SORT_RELEVANCE || length($sortby));
+        $self->{_sort} = $mode;
+	$self->{_sortby} = $sortby;
 }
 
 # set per-field weights
@@ -225,18 +252,9 @@ sub SetWeights {
         $self->{_weights} = $weights;
 }
 
-# set groups
-sub SetGroups {
-	my $self = shift;
-	my $groups = shift;
-	croak("Groups is not an array reference") unless (ref($groups) eq 'ARRAY');
-	foreach my $group (@$groups) {
-		croak("Group: $group is not an integer") unless ($group =~ /^\d+$/);
-	}
-	$self->{_groups} = $groups;
-}
-
 # set IDs range to match
+# only match those records where document ID
+# is beetwen $min and $max (including $min and $max)
 sub SetIDRange {
 	my $self = shift;
 	my $min = shift;
@@ -248,28 +266,52 @@ sub SetIDRange {
 	$self->{_max_id} = $max;
 }
 
-# set timestamps to match
-sub SetTimestampRange {
+sub SetFilter {
         my $self = shift;
-	my $min = shift;
-	my $max = shift;
-	croak("min_ts is not an integer") unless ($min =~ /^\d+$/);
-        croak("max_ts is not an integer") unless ($max =~ /^\d+$/);
-	croak("min_ts is larger than or equal to max_ts") unless ($min < $max);
-        $self->{_min_ts} = $min;
-	$self->{_max_ts} = $max;
+	my $attribute = shift;
+	my $values = shift;
+	croak("attribute is not defined") unless (defined $attribute);
+	croak("values is not an array reference") unless (ref($values) eq 'ARRAY');
+	croak("values reference is empty") unless (scalar(@$values));
+
+	foreach my $value (@$values) {
+		croak("value $value is not an integer") unless ($value =~ /^\d+$/);
+	}
+	$self->{_filter}{$attribute} = $values;
 }
 
-# set groups range to match
-sub SetGroupsRange {
-        my $self = shift;
-        my $min = shift;
-        my $max = shift;
-	croak("min_gid is not an integer") unless ($min =~ /^\d+$/);
-        croak("max_gid is not an integer") unless ($max =~ /^\d+$/);
-        croak("min_gid is larger than or equal to max_gid") unless ($min < $max);
-        $self->{_min_gid} = $min;
-        $self->{_max_gid} = $max;
+# set range filter
+# only match those records where $attribute column value
+# is beetwen $min and $max (including $min and $max)
+sub SetFilterRange {
+	my $self = shift;
+	my $attribute = shift;
+	my $min = shift;
+	my $max = shift;
+	croak("attribute is not defined") unless (defined $attribute);
+	croak("min: $min is not an integer") unless ($min =~ /^\d+$/);
+	croak("max: $max is not an integer") unless ($max =~ /^\d+$/);
+	croak("min value should be <= max") unless ($min <= $max);
+	
+	$self->{_min}{$attribute} = $min;
+	$self->{_max}{$attribute} = $max;
+}
+
+# set grouping
+# if grouping
+sub SetGroupBy {
+	my $self = shift;
+	my $attribute = shift;
+	my $func = shift;
+	croak("attribute is not defined") unless (defined $attribute);
+	croak("Unknown grouping function: $func") unless ($func==SPH_GROUPBY_DAY
+	                       				|| $func==SPH_GROUPBY_WEEK
+	                       				|| $func==SPH_GROUPBY_MONTH
+	                       				|| $func==SPH_GROUPBY_YEAR
+	                       				|| $func==SPH_GROUPBY_ATTR );
+
+	$self->{_groupby} = $attribute;
+	$self->{_groupfunc} = $func;
 }
 
 # connect to searchd server and run given search query
@@ -302,30 +344,44 @@ sub Query {
 	# build request
 	##################
 	
-        # v.1.0
 	my $req;
         $req = pack ( "NNNN", $self->{_offset}, $self->{_limit}, $self->{_mode}, $self->{_sort} ); # mode and limits
-        $req .= pack ( "N", scalar(@{$self->{_groups}}) ); # groups
-        foreach my $group (@{$self->{_groups}}) {
-		$req .= pack ( "N", $group );
-	}
+	$req .= pack ( "N", length($self->{_sortby}) ) . $self->{_sortby};
 	$req .= pack ( "N", length($query) ) . $query; # query itself
         $req .= pack ( "N", scalar(@{$self->{_weights}}) ); # weights
         foreach my $weight (@{$self->{_weights}}) {
 		$req .= pack ( "N", int($weight));
 	}
-	
         $req .= pack ( "N", length($index) ) . $index; # indexes
-        $req .=	# id/ts ranges
+        $req .=	# id range
                 pack ( "N", int($self->{_min_id}) ) .
-        	pack ( "N", int($self->{_max_id}) ) .
-      		pack ( "N", int($self->{_min_ts}) ) .
-                pack ( "N", int($self->{_max_ts}) );
+        	pack ( "N", int($self->{_max_id}) );
 
-	# v.1.1
-        $req .= # gid ranges
-                pack ( "N", int($self->{_min_gid}) ) .
-                pack ( "N", int($self->{_max_gid}) );
+	# filters
+	$req .= pack ( "N", scalar(keys %{$self->{_min}}) + scalar(keys %{$self->{_filter}}) );
+
+	foreach my $attr (keys %{$self->{_min}}) {
+		$req .= 
+			pack ( "N", length($attr) ) . $attr .
+                                pack ( "NNN", 0, $self->{_min}{$attr}, $self->{_max}{$attr} );
+	}
+
+	foreach my $attr (keys %{$self->{_filter}}) {
+		my $values = $self->{_filter}{$attr};
+		$req .=
+                	pack ( "N", length($attr) ) . $attr .
+                                pack ( "N", scalar(@$values) );
+
+		foreach my $value ( @$values ) {
+        		$req .= pack ( "N", $value );
+		}
+	}
+
+	# group-by
+	$req .= pack ( "NN", $self->{_groupfunc}, length($self->{_groupby}) ) . $self->{_groupby};
+
+	# max matches to retrieve
+	$req .= pack ( "N", $self->{_maxmatches} );
 	
 	##################
 	# send query, get response
@@ -344,18 +400,43 @@ sub Query {
 	
 	my $result = {};		# Empty hash ref
 	$result->{matches} = [];	# Empty array ref
-	my $count = unpack ( "N*", substr ( $response, 0, 4 ) );
+	my $max = length($response);	# Protection from broken response
 
-	my $p = 4;
-	while ( $count-->0 ) {
-		my ( $doc, $group, $stamp, $weight ) = unpack("N*N*N*N*", substr($response,$p,16));
-		$p += 16;
-		push(@{$result->{matches}}, {
-						"doc"		=> $doc,
-						"weight"        => $weight,
-						"group"         => $group,
-						"stamp"         => $stamp 
-						});
+	# read schema
+	my $p = 0;
+	my @fields;
+	my (%attrs, @attr_list);
+
+	my $nfields = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+	while ( $nfields-->0 && $p<$max ) {
+		my $len = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+		push(@fields, substr ( $response, $p, $len )); $p += $len;
+	}
+	$result->{"fields"} = \@fields;
+
+	my $nattrs = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+	while ( $nattrs-->0 && $p<$max  ) {
+                        my $len = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+                        my $attr = substr ( $response, $p, $len ); $p += $len;
+                        my $type = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+                        $attrs{$attr} = $type;
+			push(@attr_list, $attr);
+	}
+	$result->{"attrs"} = \%attrs;
+
+	# read match count
+	my $count = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+	
+	# read matches
+	while ( $count-->0 && $p<$max ) {
+		my $data = {};
+		( $data->{doc}, $data->{weight} ) = unpack("N*N*", substr($response,$p,8));
+		$p += 8;
+
+		foreach my $attr (@attr_list) {
+			$data->{$attr} = unpack ( "N*", substr ( $response, $p, 4 ) ); $p += 4;
+		}
+		push(@{$result->{matches}}, $data);
 	}
 	my $words;
 	($result->{total}, $result->{total_found}, $result->{time}, $words) = unpack("N*N*N*N*", substr($response, $p, 16));
