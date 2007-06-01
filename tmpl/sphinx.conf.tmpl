@@ -12,7 +12,11 @@ source <TMPL_VAR NAME=SOURCE>_source
 
     sql_query           = <TMPL_VAR NAME=QUERY>
 
-<TMPL_IF NAME=GROUP_COLUMN>    sql_group_column    = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN></TMPL_IF>
+<TMPL_IF NAME=GROUP_LOOP>
+<TMPL_LOOP NAME=GROUP_LOOP>
+    sql_group_column    = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN>
+</TMPL_LOOP>
+</TMPL_IF>
     sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
     
 }
