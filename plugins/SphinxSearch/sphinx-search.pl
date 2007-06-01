@@ -239,7 +239,7 @@ sub sphinx_search {
     
     if (exists $params{Filters}) {
         foreach my $filter (keys %{ $params{Filters}}) {
-            $spx->SetGroups($params{Filters}{$filter});
+            $spx->SetFilter($datasource . '_' . $filter, $params{Filters}{$filter});
         }
     }
     
