@@ -81,14 +81,21 @@ sub init_apps {
     my $plugin = shift;
     my ($app) = @_;
 
+    {
+        local $SIG{__WARN__} = sub { };
+        *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
+        *MT::Object::sphinx_search = sub { $plugin->sphinx_search (@_); };
+    }
+
     require MT::Entry;
     require MT::Comment;
-    $plugin->sphinx_init ('MT::Entry', select_values => { status => MT::Entry::RELEASE });
-    $plugin->sphinx_init ('MT::Comment', select_values => { visible => 1 });
+    MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE });
+    MT::Comment->sphinx_init (select_values => { visible => 1 });
     
     if ($app->isa ('MT::App::Search')) {
         $plugin->init_search_app ($app);
     }
+    
 }
 
 
@@ -129,30 +136,17 @@ sub straight_sphinx_search {
         $blog_id ? (blog_id => $blog_id) : ()
     });
 
+
     my $spx = _get_sphinx;
 
-    my $search_keyword = $app->{search_string};
-    $spx->SetGroups ([ keys %{$app->{searchparam}{IncludeBlogs}} ]);
-    my $results = $spx->Query ($search_keyword,'entry_index');
-    if (!$results) {
-        $app->log ({
-            message => "Error querying searchd daemon: " . $spx->GetLastError,
-            level   => MT::Log::ERROR(),
-            class   => 'search',
-            category    => 'straight_search',
-        });
-        return 1;
-    }
-
     require MT::Entry;
+    my $search_keyword = $app->{search_string};
+    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] });
     my(%blogs, %hits);
     my $max = $app->{searchparam}{MaxResults};
-    foreach my $match (@{$results->{matches}}) {
-        my $id = $match->{doc};
-        my $o = MT::Entry->load ($id) or next;
+    foreach my $o (@results) {
         my $blog_id = $o->blog_id;
                 
-        next if ($app->{searchparam}{IncludeBlogs} && !exists $app->{searchparam}{IncludeBlogs}{$blog_id});
         if ($hits{$blog_id} && $hits{$blog_id} >= $max) {
             my $blog = $blogs{$blog_id} || MT::Blog->load($blog_id);
             my @res = @{ $app->{results}{$blog->name} };
@@ -232,6 +226,45 @@ sub sphinx_init {
         $indexes{ $datasource }->{select_values} = $params{select_values};
     }    
 }
+
+sub sphinx_search {
+    my $plugin = shift;
+    my ($class, $search, %params) = @_;
+    
+    my $datasource = $class->datasource;
+    
+    return () if (!exists $indexes{ $datasource });
+    
+    my $spx = _get_sphinx();
+    
+    if (exists $params{Filters}) {
+        foreach my $filter (keys %{ $params{Filters}}) {
+            $spx->SetGroups($params{Filters}{$filter});
+        }
+    }
+    
+    my $results = $spx->Query ($search, $datasource . '_index');
+    if (!$results) {
+        MT->instance->log ({
+            message => "Error querying searchd daemon: " . $spx->GetLastError,
+            level   => MT::Log::ERROR(),
+            class   => 'search',
+            category    => 'straight_search',
+        });
+        return ();
+    }
+
+    my @result_objs = ();
+    foreach my $match (@{$results->{ matches }}) {
+        my $id = $match->{ doc };
+        my $o = $class->load ($id) or next;
+        push @result_objs, $o;
+    }
+    
+    return @result_objs;
+    
+}
+
 
 
 
