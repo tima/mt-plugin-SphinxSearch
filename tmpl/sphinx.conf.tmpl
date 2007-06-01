@@ -33,7 +33,7 @@ index <TMPL_VAR NAME=SOURCE>_index
 ## data source definition
 #############################################################################
 
-source entries
+source entry_source
 {
 	type		= mysql
 	strip_html	= 0
@@ -62,12 +62,12 @@ source entries
 
 index entry_index
 {
-	source			= entries
+	source			= entry_index
 	#path			= /var/data/test1
 	path			= /tmp/entry_index
 }
 
-source comments
+source comment_source
 {
 	type		= mysql
 	strip_html	= 0
@@ -95,7 +95,7 @@ source comments
 
 index comment_index
 {
-	source			= comments
+	source			= comment_source
 	#path			= /var/data/test1
 	path			= /tmp/comment_index
 }
