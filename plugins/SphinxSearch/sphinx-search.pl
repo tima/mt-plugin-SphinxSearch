@@ -177,7 +177,10 @@ sub gen_sphinx_conf {
     my %info_query;
     my %query;
     foreach my $source (keys %indexes) {
-        $query{$source} = "SELECT " . join(", ", map { $source . '_' . $_ } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . " FROM mt_$source";
+        $query{$source} = "SELECT " . join(", ", map { 
+            $indexes{$source}->{date_columns}->{$_} ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $source . '_' . $_ : $source . '_' . $_
+            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
+            " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
             $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
         }
@@ -189,7 +192,8 @@ sub gen_sphinx_conf {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],    
+                 group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],
+                 date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                 } 
         }
         keys %indexes
@@ -224,6 +228,15 @@ sub sphinx_init {
     
     if (exists $params{group_columns}) {
         push @{$indexes{ $datasource }->{ group_columns }}, grep { $_ ne 'blog_id' } @{$params{group_columns}};
+    }
+    
+    if ($props->{audit}) {
+        $indexes{$datasource}->{date_columns}->{'created_on'}++;
+        $indexes{$datasource}->{date_columns}->{'modified_on'}++;
+    }
+    
+    if (exists $params{date_columns}) {
+        $indexes{$datasource}->{date_columns}->{$_}++ foreach (keys %{$params{date_columns}});
     }
     
     if (exists $params{select_values}) {
