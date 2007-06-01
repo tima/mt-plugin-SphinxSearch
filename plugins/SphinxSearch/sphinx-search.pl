@@ -57,7 +57,7 @@ MT->add_plugin ($plugin);
 require MT::Entry;
 require MT::Comment;
 MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE });
-MT::Comment->sphinx_init (select_values => { visible => 1 });
+MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
 
 sub instance {
     $plugin;
@@ -189,7 +189,7 @@ sub gen_sphinx_conf {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_column    => $indexes{$_}->{group_columns}->[0],    
+                 group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],    
                 } 
         }
         keys %indexes
@@ -219,7 +219,11 @@ sub sphinx_init {
     };
     
     if (exists $defs->{ blog_id }) {
-        $indexes{ $datasource }->{group_columns} = [ 'blog_id' ];
+        push @{$indexes{ $datasource }->{ group_columns }}, 'blog_id';
+    }
+    
+    if (exists $params{group_columns}) {
+        push @{$indexes{ $datasource }->{ group_columns }}, grep { $_ ne 'blog_id' } @{$params{group_columns}};
     }
     
     if (exists $params{select_values}) {
