@@ -5,12 +5,20 @@
 </div>
 </div>
 
-<div class="setting">
+<div class="setting grouped">
 <div class="label"><label for="sphinx_conf_path">Sphinx Config Path</label></div>
 <div class="field">
 	<input type="text" name="sphinx_conf_path" value="<TMPL_VAR NAME=SPHINX_CONF_PATH>" />
 	<p>Full path for the sphinx.conf file (e.g., <code>/etc/sphinx/sphinx.conf</code>).</p>
 </div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="searchd_pid_path">Searchd PID File</label></div>
+    <div class="field">
+        <input type="text" name="searchd_pid_path" value="<TMPL_VAR NAME=SEARCHD_PID_PATH>" />
+        <p>Full path to the searchd.pid file</p>
+    </div>
 </div>
 
 <div class="setting grouped">

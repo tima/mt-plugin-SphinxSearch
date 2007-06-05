@@ -26,13 +26,14 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'sphinx_conf_path', { Default => undef, Scope => 'system' }],
             [ 'searchd_host', { Default => 'localhost', Scope => 'system' }],
             [ 'searchd_port', { Default => 3312, Scope => 'system' }],
+            [ 'searchd_pid_path', { Default => '/var/log/searchd.pid', Scope => 'system' } ],
             ]),
         
         tasks   => {
             'sphinx_indexer'    => {
                 name    => 'Sphinx Indexer',
                 frequency   => 60 * 60,
-                code        => \&sphinx_indexer_task,
+                code        => sub { $plugin->sphinx_indexer_task (@_) },
             }
         },
         
@@ -66,25 +67,21 @@ sub instance {
 my %indexes;
 
 sub sphinx_indexer_task {
+    my $plugin = shift;
     my $task = shift;
-
-    my $sphinx_path = $plugin->get_config_value ('sphinx_path', 'system');
-    if (!$sphinx_path) {
-        my $app = MT->instance;
-        $app->log ('Sphinx path is not set');
-        return;
+    
+    if (!$plugin->check_searchd) {
+        if (my $err = $plugin->start_searchd) {
+            MT->instance->log ("Error starting searchd: $err");
+            die ("Error starting searchd: $err");
+        }
     }
-
-    my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path',
-            'system');
-    if (!$sphinx_conf) {
-        my $app = MT->instance;
-        $app->log ('Sphinx conf path is not set');
-        return;
+    
+    if (my $err = $plugin->start_indexer) {
+        MT->instance->log ("Error starting sphinx indexer: $err");
+        die ("Error starting sphinx indexer: $err");
     }
-    my $indexer_binary = File::Spec->catdir ($sphinx_path, 'indexer');
-    my $str = `$indexer_binary --quiet --config $sphinx_conf --all --rotate`;
-    die $str if ($str);
+    
     1;
 }
 
@@ -173,6 +170,7 @@ sub gen_sphinx_conf {
     $params{ db_pass } = $app->{cfg}->DBPassword;
     $params{  db_db  } = $app->{cfg}->Database;
     $params{ tmp } = $app->{cfg}->TempDir;
+    $params{ pid_file } = $plugin->get_config_value ('searchd_pid_path', 'system');
  
     my %info_query;
     my %query;
@@ -204,6 +202,48 @@ sub gen_sphinx_conf {
     $app->send_http_header ('text/plain');
     $app->print ($app->build_page ($tmpl, \%params));
 }
+
+sub start_indexer {
+    my $plugin = shift;
+    my $sphinx_path = $plugin->get_config_value ('sphinx_path', 'system') or return "Sphinx path is not set";
+
+    my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
+    my $indexer_binary = File::Spec->catfile ($sphinx_path, 'indexer');
+    my $str = `$indexer_binary --quiet --config $sphinx_conf --all --rotate`;
+    
+    my $return_code = $? / 256;
+    return $str if ($return_code);
+    return undef;
+}
+
+sub check_searchd {
+    my $plugin = shift;
+    my $pid_path = $plugin->get_config_value ('searchd_pid_path', 'system');
+    
+    open my $pid_file, "<", $pid_path or return undef;
+    local $/ = undef;
+    my $pid = <$pid_file>;
+    close $pid_file;
+    
+    return $pid;
+}
+
+
+sub start_searchd {
+    my $plugin = shift;
+    
+    my $bin_path = $plugin->get_config_value ('sphinx_path', 'system') or return "Sphinx path is not set";
+    my $conf_path = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
+    
+    my $searchd_path = File::Spec->catfile ($bin_path, 'searchd');
+    
+    my $out = `$searchd_path --config $conf_path`;
+    my $return_code = $? / 256;
+    
+    return $out if ($return_code);
+    return undef;
+}
+
 
 sub sphinx_init {
     my $plugin = shift;
