@@ -32,7 +32,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         tasks   => {
             'sphinx_indexer'    => {
                 name    => 'Sphinx Indexer',
-                frequency   => 60 * 60,
+                frequency   => 15 * 60,
                 code        => sub { $plugin->sphinx_indexer_task (@_) },
             }
         },
