@@ -138,7 +138,7 @@ sub straight_sphinx_search {
 
     require MT::Entry;
     my $search_keyword = $app->{search_string};
-    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] });
+    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => { Descend => 'created_on' });
     my(%blogs, %hits);
     my $max = $app->{searchparam}{MaxResults};
     foreach my $o (@results) {
@@ -295,9 +295,21 @@ sub sphinx_search {
     my $spx = _get_sphinx();
     
     if (exists $params{Filters}) {
-        foreach my $filter (keys %{ $params{Filters}}) {
+        foreach my $filter (keys %{ $params{Filters} }) {
             $spx->SetFilter($datasource . '_' . $filter, $params{Filters}{$filter});
         }
+    }
+    
+    if (exists $params{Sort}) {
+        exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $datasource . '_' . $params{Sort}->{Ascend}) :
+        exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $datasource . '_' . $params{Sort}->{Descend}) :
+        exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $datasource . '_' . $params{Sort}->{Segments}) :
+        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $datasource . '_' . $params{Sort}->{Extended}) :
+                                                $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
+    }
+    else {
+        # Default to explicitly setting the sort mode to relevance
+        $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
     
     my $results = $spx->Query ($search, $datasource . '_index');
