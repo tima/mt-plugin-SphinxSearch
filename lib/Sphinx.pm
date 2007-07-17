@@ -49,6 +49,7 @@ use constant SPH_SORT_RELEVANCE		=> 0;
 use constant SPH_SORT_ATTR_DESC		=> 1;
 use constant SPH_SORT_ATTR_ASC		=> 2;
 use constant SPH_SORT_TIME_SEGMENTS	=> 3;
+use constant SPH_SORT_EXTENDED      => 4;
 
 # known attribute types
 use constant SPH_ATTR_INTEGER		=> 1;
@@ -235,7 +236,7 @@ sub SetSortMode {
 	my $sortby = shift;
         croak("Sort mode not defined") unless defined($mode);
         croak("Unknown sort mode: $mode") unless ( $mode==SPH_SORT_RELEVANCE || $mode==SPH_SORT_ATTR_DESC ||
-                                                        $mode==SPH_SORT_ATTR_ASC || $mode==SPH_SORT_TIME_SEGMENTS );
+                                                        $mode==SPH_SORT_ATTR_ASC || $mode==SPH_SORT_TIME_SEGMENTS || $mode==SPH_SORT_EXTENDED );
 	croak("Sortby must be defined") unless ($mode==SPH_SORT_RELEVANCE || length($sortby));
         $self->{_sort} = $mode;
 	$self->{_sortby} = $sortby;
