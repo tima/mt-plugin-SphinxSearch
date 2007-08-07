@@ -139,7 +139,7 @@ sub straight_sphinx_search {
     require MT::Entry;
     my $search_keyword = $app->{search_string};
     
-    my $sort_mode;
+    my $sort_mode = {};
     my $sort_mode_param = $app->param ('sort_mode') || 'descend';
     
     if ($sort_mode_param eq 'descend') {
