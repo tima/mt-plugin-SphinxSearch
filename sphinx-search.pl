@@ -11,7 +11,7 @@ use Sphinx;
 use File::Spec;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.8';
+$VERSION = '0.9';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -138,7 +138,29 @@ sub straight_sphinx_search {
 
     require MT::Entry;
     my $search_keyword = $app->{search_string};
-    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => { Descend => 'created_on' });
+    
+    my $sort_mode;
+    my $sort_mode_param = $app->param ('sort_mode') || 'descend';
+    
+    if ($sort_mode_param eq 'descend') {
+        $sort_mode = { Descend => 'created_on' };
+    }
+    elsif ($sort_mode_param eq 'ascend') {
+        $sort_mode = { Ascend => 'created_on' };
+    }
+    elsif ($sort_mode_param eq 'relevance') {
+        $sort_mode = {};
+    }
+    elsif ($sort_mode_param eq 'extended') {
+        if (my $extended_sort = $app->param ('extended_sort')) {
+            $sort_mode = { Extended => $extended_sort };            
+        }
+    }
+    elsif ($sort_mode_param eq 'segments') {
+        $sort_mode = { Segments => 'created_on' };
+    }
+    
+    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => $sort_mode);
     my(%blogs, %hits);
     my $max = $app->{searchparam}{MaxResults};
     foreach my $o (@results) {
@@ -284,6 +306,17 @@ sub sphinx_init {
     }    
 }
 
+sub _process_extended_sort {
+    my $plugin = shift;
+    my ($class, $sort_string) = @_;
+    
+    my $datasource = $class->datasource;
+    
+    $sort_string =~ s/(?<!@)\b(\w+)\b(?!(?:,|$))/${datasource}_$1/gi;    
+    $sort_string;
+}
+
+
 sub sphinx_search {
     my $plugin = shift;
     my ($class, $search, %params) = @_;
@@ -304,7 +337,7 @@ sub sphinx_search {
         exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $datasource . '_' . $params{Sort}->{Ascend}) :
         exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $datasource . '_' . $params{Sort}->{Descend}) :
         exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $datasource . '_' . $params{Sort}->{Segments}) :
-        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $datasource . '_' . $params{Sort}->{Extended}) :
+        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $plugin->_process_extended_sort ($class, $params{Sort}->{Extended})) :
                                                 $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
     else {
@@ -333,8 +366,5 @@ sub sphinx_search {
     return @result_objs;
     
 }
-
-
-
 
 1;
