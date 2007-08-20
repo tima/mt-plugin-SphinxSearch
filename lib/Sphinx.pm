@@ -132,7 +132,7 @@ sub _Connect {
 	my $dest = sockaddr_in($self->{_port}, inet_aton($self->{_host}));
 	connect($fp, $dest);
 	
-	if($!) {
+	unless($fp) {
 		$self->{_error} = "connection to {$self->{_host}}:{$self->{_port}} failed: $!";
 		return 0;
 	}	
