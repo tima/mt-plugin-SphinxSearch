@@ -11,7 +11,7 @@ use Sphinx;
 use File::Spec;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.9';
+$VERSION = '0.92';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -344,6 +344,18 @@ sub sphinx_search {
         # Default to explicitly setting the sort mode to relevance
         $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
+    
+    my $offset = 0;
+    my $limit = 200;
+    if (exists $params{Offset}) {
+        $offset = $params{Offset};
+    }
+    
+    if (exists $params{Limit}) {
+        $limit = $params{Limit};
+    }
+    
+    $spx->SetLimits ($offset, $limit);
     
     my $results = $spx->Query ($search, $datasource . '_index');
     if (!$results) {
