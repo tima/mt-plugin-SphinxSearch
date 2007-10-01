@@ -11,7 +11,7 @@ use Sphinx;
 use File::Spec;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.92';
+$VERSION = '0.95';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -160,7 +160,10 @@ sub straight_sphinx_search {
         $sort_mode = { Segments => 'created_on' };
     }
     
-    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => $sort_mode);
+    my $offset = $app->param ('offset') || 0;
+    my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
+    
+    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => $sort_mode, Offset => $offset, Limit => $limit);
     my(%blogs, %hits);
     my $max = $app->{searchparam}{MaxResults};
     foreach my $o (@results) {
