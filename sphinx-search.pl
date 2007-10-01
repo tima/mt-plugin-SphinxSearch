@@ -57,6 +57,11 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             
             'SearchSortMode'        => \&search_sort_mode_tag,
         },
+        
+        conditional_tags    => {
+            'IfCurrentSearchResultsPage'    => \&if_current_search_results_page_conditional_tag,
+        },
+        
 
 });
 MT->add_plugin ($plugin);
@@ -478,5 +483,8 @@ sub search_sort_mode_tag {
     return $mode;
 }
 
+sub if_current_search_results_page_conditional_tag {
+    $_[2]->{IfCurrentSearchResultsPage};
+}
 
 1;
