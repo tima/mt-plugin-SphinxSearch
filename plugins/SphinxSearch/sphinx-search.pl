@@ -103,6 +103,7 @@ sub init_search_app {
     {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
+        *MT::App::SearchContext::_hdlr_result_count = \&result_count_tag;
     }
 
 }
@@ -113,6 +114,14 @@ sub _get_sphinx {
 
     return $spx;
 }
+
+sub result_count_tag {
+    my ($ctx, $args) = @_;
+    require MT::Request;
+    my $r = MT::Request->instance;
+    return $r->stash ('sphinx_results_total') || 0;
+}
+
 
 sub straight_sphinx_search {
     my $app = shift;
@@ -163,22 +172,23 @@ sub straight_sphinx_search {
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
     
-    my @results = MT::Entry->sphinx_search ($search_keyword, Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, Sort => $sort_mode, Offset => $offset, Limit => $limit);
+    my $results = MT::Entry->sphinx_search ($search_keyword, 
+        Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, 
+        Sort => $sort_mode, 
+        Offset => $offset, 
+        Limit => $limit,
+    );
     my(%blogs, %hits);
-    my $max = $app->{searchparam}{MaxResults};
-    foreach my $o (@results) {
-        my $blog_id = $o->blog_id;
-                
-        if ($hits{$blog_id} && $hits{$blog_id} >= $max) {
-            my $blog = $blogs{$blog_id} || MT::Blog->load($blog_id);
-            my @res = @{ $app->{results}{$blog->name} };
-            my $count = $#res;
-            $res[$count]{maxresults} = $max;
-            next;
-        }
-        
+    foreach my $o (@{$results->{result_objs}}) {
+        my $blog_id = $o->blog_id;        
         $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
     }
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    $r->stash ('sphinx_results_total', $results->{query_results}->{total});
+    $r->stash ('sphinx_results_total_found', $results->{query_results}->{total_found});
+    
     1;
 }
 
@@ -378,7 +388,11 @@ sub sphinx_search {
         push @result_objs, $o;
     }
     
-    return @result_objs;
+    return @result_objs if wantarray;
+    return {
+        result_objs     => [ @result_objs ],
+        query_results   => $results,
+    };
     
 }
 
