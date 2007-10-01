@@ -432,7 +432,7 @@ sub search_results_page_loop_container_tag {
         local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
         defined (my $out = $builder->build ($ctx, $tokens, {
             %$cond,
-            IfCurrentSearchResultsPage => $page == $current_page,
+            IfCurrentSearchResultsPage => ($page == $current_page),
         })) or return $ctx->error ($builder->errstr);
         $res .= $out;
     }
