@@ -113,7 +113,7 @@ sub init_search_app {
     {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
-        *MT::App::SearchContext::_hdlr_result_count = \&result_count_tag;
+        *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
     }
 
 }
