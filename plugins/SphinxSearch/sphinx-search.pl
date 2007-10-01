@@ -60,6 +60,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         
         conditional_tags    => {
             'IfCurrentSearchResultsPage'    => \&if_current_search_results_page_conditional_tag,
+            'IfNotCurrentSearchResultsPage' => sub { !if_current_search_results_page_conditional_tag (@_)},
         },
         
 
