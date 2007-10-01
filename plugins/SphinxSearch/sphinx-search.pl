@@ -54,6 +54,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchResultsOffset'   => \&search_results_offset_tag,
             'SearchResultsLimit'    => \&search_results_limit_tag,
             'SearchResultsPage'     => \&search_results_page_tag,
+            
+            'SearchSortMode'        => \&search_sort_mode_tag,
         },
 
 });
@@ -465,6 +467,15 @@ sub search_results_page_tag {
     require MT::Request;
     my $r = MT::Request->instance;
     return $r->stash ('sphinx_pages_current') || 0;
+}
+
+sub search_sort_mode_tag {
+    my ($ctx, $args) = @_;
+    
+    require MT::App;
+    my $app = MT::App->instance;
+    my $mode = $app->param ('sort_mode') || 'descend';
+    return $mode;
 }
 
 
