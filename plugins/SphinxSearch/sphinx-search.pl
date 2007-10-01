@@ -9,6 +9,7 @@ use base qw( MT::Plugin );
 use MT;
 use Sphinx;
 use File::Spec;
+use POSIX;
 
 use vars qw( $VERSION $plugin );
 $VERSION = '0.95';
@@ -45,6 +46,14 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             },
         },
         
+        container_tags  => {
+            'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
+        },
+        
+        template_tags   => {
+            'SearchResultsOffset'   => \&search_results_offset_tag,
+            'SearchResultsLimit'    => \&search_results_limit_tag,
+        },
 
 });
 MT->add_plugin ($plugin);
@@ -184,11 +193,17 @@ sub straight_sphinx_search {
         $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
     }
     
+    my $num_pages = ceil ($results->{query_results}->{total} / $limit);
+    my $cur_page  = int ($offset / $limit) + 1;
+    
     require MT::Request;
     my $r = MT::Request->instance;
     $r->stash ('sphinx_results_total', $results->{query_results}->{total});
     $r->stash ('sphinx_results_total_found', $results->{query_results}->{total_found});
-    
+    $r->stash ('sphinx_pages_number', $num_pages);
+    $r->stash ('sphinx_pages_current', $cur_page);
+    $r->stash ('sphinx_pages_offset', $offset);
+    $r->stash ('sphinx_pages_limit', $limit);
     1;
 }
 
@@ -394,6 +409,51 @@ sub sphinx_search {
         query_results   => $results,
     };
     
+}
+
+sub search_results_page_loop_container_tag {
+    my ($ctx, $args, $cond) = @_;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    my $current_page = $r->stash ('sphinx_pages_current');
+    my $limit        = $r->stash ('sphinx_pages_limit');
+    my $builder = $ctx->stash ('builder');
+    my $tokens  = $ctx->stash ('tokens');
+    
+    my $res = '';
+    foreach my $page (1 .. $number_pages) {
+        local $ctx->{__stash}{sphinx_page_number} = $page;
+        # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
+        local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
+        defined (my $out = $builder->build ($ctx, $tokens, {
+            %$cond,
+            IfCurrentSearchResultsPage => $page == $current_page,
+        })) or return $ctx->error ($builder->errstr);
+        $res .= $out;
+    }
+    $res;
+}
+
+sub search_results_limit_tag {
+    my ($ctx, $args) = @_;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    
+    return $r->stash ('sphinx_pages_limit') || 0;
+}
+
+sub search_results_offset_tag {
+    my ($ctx, $args) = @_;
+    
+    my $offset = $ctx->stash ('sphinx_pages_offset');
+    return $offset if defined $offset;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    return $r->stash ('sphinx_pages_offset') || 0;
 }
 
 1;
