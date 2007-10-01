@@ -53,6 +53,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         template_tags   => {
             'SearchResultsOffset'   => \&search_results_offset_tag,
             'SearchResultsLimit'    => \&search_results_limit_tag,
+            'SearchResultsPage'     => \&search_results_page_tag,
         },
 
 });
@@ -455,5 +456,11 @@ sub search_results_offset_tag {
     my $r = MT::Request->instance;
     return $r->stash ('sphinx_pages_offset') || 0;
 }
+
+sub search_results_page_tag {
+    my ($ctx, $args) = @_;
+    return $ctx->stash ('sphinx_page_number') || 0;
+}
+
 
 1;
