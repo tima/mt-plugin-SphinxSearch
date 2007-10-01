@@ -459,7 +459,12 @@ sub search_results_offset_tag {
 
 sub search_results_page_tag {
     my ($ctx, $args) = @_;
-    return $ctx->stash ('sphinx_page_number') || 0;
+    my $page_number = $ctx->stash ('sphinx_page_number');
+    return $page_number if $page_number;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    return $r->stash ('sphinx_pages_current') || 0;
 }
 
 
