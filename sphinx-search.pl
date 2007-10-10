@@ -12,7 +12,7 @@ use File::Spec;
 use POSIX;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.98';
+$VERSION = '0.99';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -28,6 +28,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'searchd_host', { Default => 'localhost', Scope => 'system' }],
             [ 'searchd_port', { Default => 3312, Scope => 'system' }],
             [ 'searchd_pid_path', { Default => '/var/log/searchd.pid', Scope => 'system' } ],
+            [ 'search_excerpt_words', { Default => 9, Scope => 'system' } ],
             ]),
         
         tasks   => {
@@ -498,9 +499,11 @@ sub search_result_excerpt_tag {
     require MT::App;
     my $app = MT::App->instance;
     my $search_string = $app->{search_string};
+    my $words = $plugin->get_config_value ('search_excerpt_words', 'system');
     
-    if ($entry->text && $entry->text =~ /((((\w+)\b[ \t]*){0,3})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,3}))/ims) {
+    if ($entry->text && $entry->text =~ /((((\w+)\b[ \t]*){0,$words})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,$words}))/ims) {
         my ($excerpt, $pre, $post) = ($1, $2, $5);
+        $excerpt =~ s{$search_string}{<b>$search_string</b>}g;
         $entry->excerpt ($excerpt);
     }
     
