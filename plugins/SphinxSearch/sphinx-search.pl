@@ -56,6 +56,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchResultsPage'     => \&search_results_page_tag,
             
             'SearchSortMode'        => \&search_sort_mode_tag,
+            
+            'SearchResultExcerpt'   => \&search_result_excerpt_tag,
         },
         
         conditional_tags    => {
@@ -486,6 +488,24 @@ sub search_sort_mode_tag {
 
 sub if_current_search_results_page_conditional_tag {
     $_[2]->{IfCurrentSearchResultsPage};
+}
+
+sub search_result_excerpt_tag {
+    my ($ctx, $args) = @_;
+    
+    my $entry = $ctx->stash ('entry') or return $ctx->_no_entry_error ('MTSearchResultExcerpt');
+    
+    require MT::App;
+    my $app = MT::App->instance;
+    my $search_string = $app->{search_string};
+    
+    if ($entry->text && $entry->text =~ /((((\w+)\b[ \t]*){0,3})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,3}))/ims) {
+        my ($excerpt, $pre, $post) = ($1, $2, $5);
+        $entry->excerpt ($excerpt);
+    }
+    
+    my ($handler) = $ctx->handler_for ('EntryExcerpt');
+    return $handler->($ctx, $args);
 }
 
 1;
