@@ -503,7 +503,7 @@ sub search_result_excerpt_tag {
     
     require MT::Util;
     my $text = MT::Util::remove_html ($entry->text);
-    if ($text && $text =~ /((((\w+)\b[ \t]*){0,$words})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,$words}))/ims) {
+    if ($text && $text =~ /((((\w+)\b\W*){0,$words})$search_string\b[ \t]*(((\w+)\b\W*){0,$words}))/ims) {
         my ($excerpt, $pre, $post) = ($1, $2, $5);
         $excerpt =~ s{$search_string}{<b>$search_string</b>}g;
         $entry->excerpt ($excerpt);
