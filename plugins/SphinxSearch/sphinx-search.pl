@@ -501,7 +501,9 @@ sub search_result_excerpt_tag {
     my $search_string = $app->{search_string};
     my $words = $plugin->get_config_value ('search_excerpt_words', 'system');
     
-    if ($entry->text && $entry->text =~ /((((\w+)\b[ \t]*){0,$words})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,$words}))/ims) {
+    require MT::Util;
+    my $text = MT::Util::remove_html ($entry->text);
+    if ($text && $text =~ /((((\w+)\b[ \t]*){0,$words})$search_string\b[ \t]*(((\w+)\b[ \t]*){0,$words}))/ims) {
         my ($excerpt, $pre, $post) = ($1, $2, $5);
         $excerpt =~ s{$search_string}{<b>$search_string</b>}g;
         $entry->excerpt ($excerpt);
