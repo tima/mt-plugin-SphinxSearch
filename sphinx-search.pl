@@ -385,6 +385,13 @@ sub sphinx_search {
         $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
     
+    if (exists $params{Match}) {
+    # do something here
+    }
+    else {
+        $spx->SetMatchMode (Sphinx::SPH_MATCH_PHRASE);
+    }
+    
     my $offset = 0;
     my $limit = 200;
     if (exists $params{Offset}) {
