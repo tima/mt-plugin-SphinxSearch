@@ -125,8 +125,22 @@ sub init_search_app {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
         *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
+        my $orig_results = \&MT::App::Search::Context::_hdlr_results;
+        *MT::App::Search::Context::_hdlr_results = sub {
+            _resort_sphinx_results (@_);
+            $orig_results->(@_);
+        }
     }
 
+}
+
+sub _resort_sphinx_results {
+    my ($ctx, $args, $cond) = @_;
+    
+    my $results = $ctx->stash ('results') || return;
+    
+    $results = [ sort { $a->{entry}->{__sphinx_search_index} cmp $b->{entry}->{__sphinx_search_index} } @$results ];
+    $ctx->stash ('results', $results);
 }
 
 sub _get_sphinx {
@@ -200,8 +214,10 @@ sub straight_sphinx_search {
         Limit => $limit,
     );
     my(%blogs, %hits);
+    my $i = 0;
     foreach my $o (@{$results->{result_objs}}) {
-        my $blog_id = $o->blog_id;        
+        my $blog_id = $o->blog_id;
+        $o->{__sphinx_search_index} = $i++;
         $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
     }
     
