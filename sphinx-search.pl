@@ -139,7 +139,7 @@ sub _resort_sphinx_results {
     
     my $results = $ctx->stash ('results') || return;
     
-    $results = [ sort { $a->{entry}->{__sphinx_search_index} cmp $b->{entry}->{__sphinx_search_index} } @$results ];
+    $results = [ sort { $a->{entry}->{__sphinx_search_index} <=> $b->{entry}->{__sphinx_search_index} } @$results ];
     $ctx->stash ('results', $results);
 }
 
