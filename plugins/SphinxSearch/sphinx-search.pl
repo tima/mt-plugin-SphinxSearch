@@ -30,15 +30,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'searchd_pid_path', { Default => '/var/log/searchd.pid', Scope => 'system' } ],
             [ 'search_excerpt_words', { Default => 9, Scope => 'system' } ],
             ]),
-        
-        tasks   => {
-            'sphinx_indexer'    => {
-                name    => 'Sphinx Indexer',
-                frequency   => 15 * 60,
-                code        => sub { $plugin->sphinx_indexer_task (@_) },
-            }
-        },
-        
+                
         init_app    => \&init_apps,
         
         app_methods => {
@@ -73,6 +65,21 @@ MT->add_plugin ($plugin);
 sub instance {
     $plugin;
 }
+
+sub init_registry {
+    my $plugin = shift;
+    my $reg = {
+        tasks   => {
+            'sphinx_indexer'    => {
+                name    => 'Sphinx Indexer',
+                frequency   => 15 * 60,
+                code        => sub { $plugin->sphinx_indexer_task (@_) },
+            }
+        },        
+    };
+    $plugin->registry ($reg);
+}
+
 
 my %indexes;
 
