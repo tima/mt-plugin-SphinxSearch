@@ -70,17 +70,6 @@ $plugin = MT::Plugin::SphinxSearch->new ({
 });
 MT->add_plugin ($plugin);
 
-{
-    local $SIG{__WARN__} = sub { };
-    *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
-    *MT::Object::sphinx_search = sub { $plugin->sphinx_search (@_); };
-}
-
-require MT::Entry;
-require MT::Comment;
-MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE });
-MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
-
 sub instance {
     $plugin;
 }
@@ -109,6 +98,17 @@ sub sphinx_indexer_task {
 sub init_apps {
     my $plugin = shift;
     my ($app) = @_;
+
+    {
+        local $SIG{__WARN__} = sub { };
+        *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
+        *MT::Object::sphinx_search = sub { $plugin->sphinx_search (@_); };
+    }
+
+    require MT::Entry;
+    require MT::Comment;
+    MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE });
+    MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
     
     if ($app->isa ('MT::App::Search')) {
         $plugin->init_search_app ($app);
