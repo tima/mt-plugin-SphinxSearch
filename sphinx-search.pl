@@ -31,14 +31,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'search_excerpt_words', { Default => 9, Scope => 'system' } ],
             ]),
                 
-        init_app    => \&init_apps,
-        
-        app_methods => {
-            'MT::App::CMS'  => {
-                'gen_sphinx_conf'  => \&gen_sphinx_conf,
-            },
-        },
-        
+        init_app    => \&init_apps,        
 });
 MT->add_plugin ($plugin);
 
@@ -49,6 +42,13 @@ sub instance {
 sub init_registry {
     my $plugin = shift;
     my $reg = {
+        applications    => {
+            cms         => {
+                methods => {
+                    'gen_sphinx_conf'  => \&gen_sphinx_conf,                    
+                }
+            }
+        },
         tasks   => {
             'sphinx_indexer'    => {
                 name    => 'Sphinx Indexer',
@@ -111,7 +111,7 @@ sub init_apps {
 
     require MT::Entry;
     require MT::Comment;
-    MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE });
+    MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE }, date_columns => { authored_on => 1 });
     MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
     
     if ($app->isa ('MT::App::Search')) {
@@ -191,10 +191,10 @@ sub straight_sphinx_search {
     my $sort_mode_param = $app->param ('sort_mode') || 'descend';
     
     if ($sort_mode_param eq 'descend') {
-        $sort_mode = { Descend => 'created_on' };
+        $sort_mode = { Descend => 'authored_on' };
     }
     elsif ($sort_mode_param eq 'ascend') {
-        $sort_mode = { Ascend => 'created_on' };
+        $sort_mode = { Ascend => 'authored_on' };
     }
     elsif ($sort_mode_param eq 'relevance') {
         $sort_mode = {};
@@ -205,7 +205,7 @@ sub straight_sphinx_search {
         }
     }
     elsif ($sort_mode_param eq 'segments') {
-        $sort_mode = { Segments => 'created_on' };
+        $sort_mode = { Segments => 'authored_on' };
     }
     
     my $offset = $app->param ('offset') || 0;
