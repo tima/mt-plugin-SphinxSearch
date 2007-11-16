@@ -39,26 +39,6 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             },
         },
         
-        container_tags  => {
-            'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
-        },
-        
-        template_tags   => {
-            'SearchResultsOffset'   => \&search_results_offset_tag,
-            'SearchResultsLimit'    => \&search_results_limit_tag,
-            'SearchResultsPage'     => \&search_results_page_tag,
-            
-            'SearchSortMode'        => \&search_sort_mode_tag,
-            
-            'SearchResultExcerpt'   => \&search_result_excerpt_tag,
-        },
-        
-        conditional_tags    => {
-            'IfCurrentSearchResultsPage'    => \&if_current_search_results_page_conditional_tag,
-            'IfNotCurrentSearchResultsPage' => sub { !if_current_search_results_page_conditional_tag (@_)},
-        },
-        
-
 });
 MT->add_plugin ($plugin);
 
@@ -75,7 +55,24 @@ sub init_registry {
                 frequency   => 15 * 60,
                 code        => sub { $plugin->sphinx_indexer_task (@_) },
             }
-        },        
+        },
+        tags    => {
+            function    => {
+                'SearchResultsOffset'   => \&search_results_offset_tag,
+                'SearchResultsLimit'    => \&search_results_limit_tag,
+                'SearchResultsPage'     => \&search_results_page_tag,
+
+                'SearchSortMode'        => \&search_sort_mode_tag,
+
+                'SearchResultExcerpt'   => \&search_result_excerpt_tag,                
+            },
+            block   => {
+                'IfCurrentSearchResultsPage?'    => \&if_current_search_results_page_conditional_tag,
+                'IfNotCurrentSearchResultsPage?' => sub { !if_current_search_results_page_conditional_tag (@_)},
+                
+                'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
+            },
+        }      
     };
     $plugin->registry ($reg);
 }
