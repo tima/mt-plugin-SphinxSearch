@@ -458,6 +458,7 @@ sub search_results_page_loop_container_tag {
     my $tokens  = $ctx->stash ('tokens');
     
     my $res = '';
+    my $glue = $args->{glue} || '';
     foreach my $page (1 .. $number_pages) {
         local $ctx->{__stash}{sphinx_page_number} = $page;
         # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
@@ -466,6 +467,7 @@ sub search_results_page_loop_container_tag {
             %$cond,
             IfCurrentSearchResultsPage => ($page == $current_page),
         })) or return $ctx->error ($builder->errstr);
+        $res .= $glue if $res ne '';
         $res .= $out;
     }
     $res;
