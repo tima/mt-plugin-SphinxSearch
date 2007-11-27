@@ -63,7 +63,9 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         
         conditional_tags    => {
             'IfCurrentSearchResultsPage'    => \&if_current_search_results_page_conditional_tag,
-            'IfNotCurrentSearchResultsPage' => sub { !if_current_search_results_page_conditional_tag (@_)},
+            'IfNotCurrentSearchResultsPage' => sub { !if_current_search_results_page_conditional_tag (@_) },
+            'IfMultipleSearchResultsPages'  => \&if_multiple_search_results_pages_conditional_tag,
+            'IfSingleSearchResultsPage'     => sub { !if_multiple_search_results_pages_conditional_tag (@_) },
         },
         
 
@@ -514,6 +516,13 @@ sub search_sort_mode_tag {
 
 sub if_current_search_results_page_conditional_tag {
     $_[2]->{IfCurrentSearchResultsPage};
+}
+
+sub if_multiple_search_results_pages_conditional_tag {
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    return $number_pages > 1;
 }
 
 sub search_result_excerpt_tag {
