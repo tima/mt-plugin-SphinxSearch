@@ -24,11 +24,13 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         system_config_template  => 'system_config.tmpl',
         settings    => MT::PluginSettings->new ([
             [ 'sphinx_path', { Default => undef, Scope => 'system' }],
+            [ 'sphinx_file_path', { Default => undef, Scope => 'system' } ],
             [ 'sphinx_conf_path', { Default => undef, Scope => 'system' }],
             [ 'searchd_host', { Default => 'localhost', Scope => 'system' }],
             [ 'searchd_port', { Default => 3312, Scope => 'system' }],
             [ 'searchd_pid_path', { Default => '/var/log/searchd.pid', Scope => 'system' } ],
             [ 'search_excerpt_words', { Default => 9, Scope => 'system' } ],
+            [ 'index_morphology', { Default => 'none', Scope => 'system' } ],
             ]),
         
         tasks   => {
@@ -237,6 +239,15 @@ sub straight_sphinx_search {
     1;
 }
 
+sub _pid_path {
+    my $plugin = shift;
+    my $pid_file = $plugin->get_config_value ('searchd_pid_path', 'system');
+    my $sphinx_file_path = $plugin->get_config_value ('sphinx_file_path', 'system');
+    
+    return File::Spec->catfile ($sphinx_file_path, 'searchd.pid') if ($sphinx_file_path);
+    return $sphinx_file_path;
+}
+
 sub gen_sphinx_conf {
     my $app = shift;
     
@@ -250,7 +261,9 @@ sub gen_sphinx_conf {
     $params{ db_pass } = $app->{cfg}->DBPassword;
     $params{  db_db  } = $app->{cfg}->Database;
     $params{ tmp } = $app->{cfg}->TempDir;
-    $params{ pid_file } = $plugin->get_config_value ('searchd_pid_path', 'system');
+    $params{ file_path } = $plugin->get_config_value ('sphinx_file_path', 'system') || $app->{cfg}->TempDir;
+    $params{ pid_path } = $plugin->_pid_path;
+    $params{ morphology } = $plugin->get_config_value ('index_morphology', 'system') || 'none';
  
     my %info_query;
     my %query;
@@ -298,14 +311,16 @@ sub start_indexer {
 
 sub check_searchd {
     my $plugin = shift;
-    my $pid_path = $plugin->get_config_value ('searchd_pid_path', 'system');
+    my $pid_path = $plugin->_pid_path;
     
     open my $pid_file, "<", $pid_path or return undef;
     local $/ = undef;
     my $pid = <$pid_file>;
     close $pid_file;
     
-    return $pid;
+    # returns number of process that exist and can be signaled
+    # sends a 0 signal, which is meaningless as far as I can tell
+    return kill 0, $pid;
 }
 
 
@@ -314,6 +329,16 @@ sub start_searchd {
     
     my $bin_path = $plugin->get_config_value ('sphinx_path', 'system') or return "Sphinx path is not set";
     my $conf_path = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
+    my $file_path = $plugin->get_config_value ('sphinx_file_path', 'system') or return "Sphinx file path is not set";
+    
+    # Check for lock files and nix them if they exist
+    # it's assumed that searchd is *not* running when this function is called
+    foreach my $source (keys %indexes) {
+        my $lock_path = File::Spec->catfile ($file_path, $source . '_index.spl');
+        if (-f $lock_path) {
+            unlink $lock_path;
+        }
+    }
     
     my $searchd_path = File::Spec->catfile ($bin_path, 'searchd');
     
