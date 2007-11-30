@@ -43,6 +43,7 @@ use constant SPH_MATCH_ALL		=> 0;
 use constant SPH_MATCH_ANY		=> 1;
 use constant SPH_MATCH_PHRASE		=> 2;
 use constant SPH_MATCH_BOOLEAN		=> 3;
+use constant SPH_MATCH_EXTENDED		=> 4;
 
 # known sort modes
 use constant SPH_SORT_RELEVANCE		=> 0;
