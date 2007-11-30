@@ -439,7 +439,7 @@ sub sphinx_search {
                               $spx->SetMatchMode (Sphinx::SPH_MATCH_ALL);
     }
     else {
-        $spx->SetMatchMode (Sphinx::SPH_MATCH_PHRASE);
+        $spx->SetMatchMode (Sphinx::SPH_MATCH_ALL);
     }
     
     my $offset = 0;
