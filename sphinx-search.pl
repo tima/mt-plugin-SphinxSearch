@@ -215,11 +215,14 @@ sub straight_sphinx_search {
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
     
+    my $match_mode = $app->param ('match_mode') || 'all';
+    
     my $results = MT::Entry->sphinx_search ($search_keyword, 
         Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, 
-        Sort => $sort_mode, 
-        Offset => $offset, 
-        Limit => $limit,
+        Sort    => $sort_mode, 
+        Offset  => $offset, 
+        Limit   => $limit,
+        Match   => $match_mode,
     );
     my(%blogs, %hits);
     my $i = 0;
@@ -433,7 +436,11 @@ sub sphinx_search {
     }
     
     if (exists $params{Match}) {
-    # do something here
+        my $match = $params{Match};
+        $match eq 'boolean' ? $spx->SetMatchMode (Sphinx::SPH_MATCH_BOOLEAN) :
+        $match eq 'phrase'  ? $spx->SetMatchMode (Sphinx::SPH_MATCH_PHRASE)  :
+        $match eq 'any'     ? $spx->SetMatchMode (Sphinx::SPH_MATCH_ANY)     :
+                              $spx->SetMatchMode (Sphinx::SPH_MATCH_ALL);
     }
     else {
         $spx->SetMatchMode (Sphinx::SPH_MATCH_PHRASE);
