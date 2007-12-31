@@ -65,6 +65,7 @@ sub init_registry {
                 'SearchResultsPage'     => \&search_results_page_tag,
 
                 'SearchSortMode'        => \&search_sort_mode_tag,
+                'SearchMatchMode'       => \&search_match_mode_tag,
 
                 'SearchResultExcerpt'   => \&search_result_excerpt_tag,                
             },
@@ -548,6 +549,15 @@ sub search_sort_mode_tag {
     require MT::App;
     my $app = MT::App->instance;
     my $mode = $app->param ('sort_mode') || 'descend';
+    return $mode;
+}
+
+sub search_match_mode_tag {
+    my ($ctx, $args) = @_;
+        
+    require MT::App;
+    my $app = MT::App->instance;
+    my $mode = $app->param ('match_mode') || 'all';
     return $mode;
 }
 
