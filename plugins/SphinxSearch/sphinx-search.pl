@@ -590,21 +590,7 @@ sub search_result_excerpt_tag {
         }        
         
     }
-    my $text = MT::Util::remove_html ($entry->text);
-    if ($text && $text =~ /(((([\w']+)\b\W*){0,$words})$search_string\b\W*((([\w']+)\b\W*){0,$words}))/ims) {
-        my ($excerpt, $pre, $post) = ($1, $2, $5);
-        $excerpt =~ s{($search_string)}{<b>$1</b>}ig;
-        $entry->excerpt ($excerpt);
-    }
-    else {
-        $text = MT::Util::remove_html ($entry->text_more);
-        if ($text && $text =~ /(((([\w']+)\b\W*){0,$words})$search_string\b\W*((([\w']+)\b\W*){0,$words}))/ims) {
-            my ($excerpt, $pre, $post) = ($1, $2, $5);
-            $excerpt =~ s{($search_string)}{<b>$1</b>}ig;
-            $entry->excerpt ($excerpt);
-        }        
-    }
-    
+        
     my ($handler) = $ctx->handler_for ('EntryExcerpt');
     return $handler->($ctx, $args);
 }
