@@ -12,7 +12,7 @@ use File::Spec;
 use POSIX;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.99.8';
+$VERSION = '0.99.9';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
@@ -587,8 +587,7 @@ sub search_result_excerpt_tag {
             $excerpt =~ s{($search_string)}{<b>$1</b>}ig;
             $entry->excerpt ($excerpt);
             last TEXT_FIELD;
-        }        
-        
+        }    
     }
         
     my ($handler) = $ctx->handler_for ('EntryExcerpt');
