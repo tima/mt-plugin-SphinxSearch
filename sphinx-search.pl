@@ -80,8 +80,8 @@ sub init_registry {
                 
                 'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
                 
-                'IfFirstSearchResultsPage'  => sub { !previous_search_results_page (@_) },
-                'IfLastSearchResultsPage'   => sub { !next_search_results_page (@_) },
+                'IfFirstSearchResultsPage?'  => sub { !previous_search_results_page (@_) },
+                'IfLastSearchResultsPage?'   => sub { !next_search_results_page (@_) },
             },
         }      
     };
