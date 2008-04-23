@@ -562,7 +562,7 @@ sub search_match_mode_tag {
 }
 
 sub if_current_search_results_page_conditional_tag {
-    $_[2]->{IfCurrentSearchResultsPage};
+    $_[2]->{ifcurrentsearchresultspage};
 }
 
 sub if_multiple_search_results_pages_conditional_tag {
