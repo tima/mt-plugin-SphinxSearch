@@ -67,7 +67,10 @@ sub init_registry {
                 'SearchSortMode'        => \&search_sort_mode_tag,
                 'SearchMatchMode'       => \&search_match_mode_tag,
 
-                'SearchResultExcerpt'   => \&search_result_excerpt_tag,                
+                'SearchResultExcerpt'   => \&search_result_excerpt_tag,  
+                
+                'NextSearchResultsPage' => \&next_search_results_page,
+                'PreviousSearchResultsPage' => \&previous_search_results_page,              
             },
             block   => {
                 'IfCurrentSearchResultsPage?'    => \&if_current_search_results_page_conditional_tag,
@@ -76,6 +79,9 @@ sub init_registry {
                 'IfSingleSearchResultsPage?'     => sub { !if_multiple_search_results_pages_conditional_tag (@_) },
                 
                 'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
+                
+                'IfFirstSearchResultsPage'  => sub { !previous_search_results_page (@_) },
+                'IfLastSearchResultsPage'   => sub { !next_search_results_page (@_) },
             },
         }      
     };
@@ -593,5 +599,26 @@ sub search_result_excerpt_tag {
     my ($handler) = $ctx->handler_for ('EntryExcerpt');
     return $handler->($ctx, $args);
 }
+
+sub next_search_results_page {
+    my ($ctx, $args, $cond) = @_;
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    my $current_page = $r->stash ('sphinx_pages_current');
+    
+    $current_page == $number_pages ? '' : $current_page + 1;
+}
+
+sub previous_search_results_page {
+    my ($ctx, $args, $cond) = @_;
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    my $current_page = $r->stash ('sphinx_pages_current');
+    
+    $current_page == 1 : '' : $current_page - 1;
+}
+
 
 1;
