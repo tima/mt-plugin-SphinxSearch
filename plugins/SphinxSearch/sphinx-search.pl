@@ -617,7 +617,7 @@ sub previous_search_results_page {
     my $number_pages = $r->stash ('sphinx_pages_number');
     my $current_page = $r->stash ('sphinx_pages_current');
     
-    $current_page == 1 : '' : $current_page - 1;
+    $current_page == 1 ? '' : $current_page - 1;
 }
 
 
