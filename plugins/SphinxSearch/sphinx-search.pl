@@ -185,7 +185,12 @@ sub straight_sphinx_search {
 
     my $spx = _get_sphinx;
 
-    require MT::Entry;
+    my $index = $app->param ('index') || 'entry';
+    my $class = $indexes{ $index }->{class};
+    eval ("require $class;");
+    if ($@) {
+        return $app->error ("Error loading $class ($index): " . $@);
+    }
     my $search_keyword = $app->{search_string};
     
     my $sort_mode = {};
@@ -214,7 +219,7 @@ sub straight_sphinx_search {
     
     my $match_mode = $app->param ('match_mode') || 'all';
     
-    my $results = MT::Entry->sphinx_search ($search_keyword, 
+    my $results = $class->sphinx_search ($search_keyword, 
         Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, 
         Sort    => $sort_mode, 
         Offset  => $offset, 
@@ -353,7 +358,6 @@ sub start_searchd {
     return undef;
 }
 
-
 sub sphinx_init {
     my $plugin = shift;
     my ($class, %params) = @_;
@@ -364,12 +368,23 @@ sub sphinx_init {
     
     my $props = $class->properties;
 
+
     my $primary_key = $props->{primary_key};
     my $defs = $class->column_defs;
+    my $columns = [ grep { $_ ne $primary_key } keys %$defs ];
+    if ($params{include_columns}) {
+        my $includes = { map { $_ => 1} @{$params{include_columns}} };
+        $columns = [ grep {exists $includes->{$_}} @$columns ];
+    }
+    elsif ($params{exclude_columns}) {
+        my $excludes = { map { $_ => 1 } @{$params{exclude_columns}} };
+        $columns = [ grep { !exists $excludes->{$_} } @$columns ];
+    }
     $indexes{ $datasource } = {
-        id_column   => $primary_key,
-        columns     => [ grep { $_ ne $primary_key } keys %$defs ],
+        id_column   => $params{id_column} || $primary_key,
+        columns     => $columns,
     };
+    $indexes{ $datasource }->{class} = $class;
     
     if (exists $defs->{ blog_id }) {
         push @{$indexes{ $datasource }->{ group_columns }}, 'blog_id';
@@ -385,12 +400,14 @@ sub sphinx_init {
     }
     
     if (exists $params{date_columns}) {
-        $indexes{$datasource}->{date_columns}->{$_}++ foreach (keys %{$params{date_columns}});
+        $indexes{$datasource}->{date_columns}->{$_}++ foreach (ref ($params{date_columns}) eq 'HASH' ? keys %{$params{date_columns}} : @{$params{date_columns}});
     }
     
     if (exists $params{select_values}) {
         $indexes{ $datasource }->{select_values} = $params{select_values};
     }    
+    
+    $indexes{ $datasource }->{id_to_obj} = $params{id_to_obj} || sub { $class->load ($_[0]) };
 }
 
 sub _process_extended_sort {
@@ -468,9 +485,10 @@ sub sphinx_search {
     }
 
     my @result_objs = ();
+    my $meth = $indexes{ $datasource }->{id_to_obj};
     foreach my $match (@{$results->{ matches }}) {
         my $id = $match->{ doc };
-        my $o = $class->load ($id) or next;
+        my $o = $meth->($id) or next;
         push @result_objs, $o;
     }
     
