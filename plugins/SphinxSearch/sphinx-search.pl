@@ -294,6 +294,7 @@ sub gen_sphinx_conf {
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
+                 delta  => $indexes{$_}->{delta},
                 } 
         }
         keys %indexes
@@ -367,7 +368,6 @@ sub sphinx_init {
     return if (exists $indexes{ $datasource });
     
     my $props = $class->properties;
-
 
     my $primary_key = $props->{primary_key};
     my $defs = $class->column_defs;

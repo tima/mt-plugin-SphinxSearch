@@ -33,6 +33,19 @@ index <TMPL_VAR NAME=SOURCE>_index
 	morphology		= <TMPL_VAR NAME=MORPHOLOGY>
 }
 
+<TMPL_IF NAME=DELTA>
+source <TMPL_VAR NAME=SOURCE>_delta_source : <TMPL_VAR NAME=SOURCE>_source
+{
+    sql_query       = <TMPL_VAR NAME=QUERY> AND DATE_ADD(<TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=DELTA>, INTERVAL 36 HOUR) > NOW()
+}
+
+index <TMPL_VAR NAME=SOURCE>_delta_index : <TMPL_VAR NAME=SOURCE>_index
+{
+    source          = <TMPL_VAR NAME=SOURCE>_delta_source
+    path            = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=SOURCE>_delta_index
+}
+</TMPL_IF>
+
 </TMPL_LOOP>
 <TMPL_UNLESS NAME=SOURCE_LOOP>
 #
