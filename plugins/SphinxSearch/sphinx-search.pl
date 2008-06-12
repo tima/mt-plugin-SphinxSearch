@@ -474,7 +474,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit);
     
-    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta" : '' ));
+    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta_index" : '' ));
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
