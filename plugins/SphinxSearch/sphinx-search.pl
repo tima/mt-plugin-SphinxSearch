@@ -385,6 +385,7 @@ sub sphinx_init {
         columns     => $columns,
     };
     $indexes{ $datasource }->{class} = $class;
+    $indexes{ $datasource }->{delta} = $params{delta};
     
     if (exists $defs->{ blog_id }) {
         push @{$indexes{ $datasource }->{ group_columns }}, 'blog_id';
@@ -473,7 +474,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit);
     
-    my $results = $spx->Query ($search, $datasource . '_index');
+    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta" : '' ));
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
