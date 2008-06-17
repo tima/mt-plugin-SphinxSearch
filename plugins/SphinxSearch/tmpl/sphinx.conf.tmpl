@@ -1,9 +1,7 @@
 <TMPL_LOOP NAME=SOURCE_LOOP>
 source <TMPL_VAR NAME=SOURCE>_source
 {
-    type    = mysql
-	strip_html	= 0
-	index_html_attrs	=
+    type                = mysql
 	sql_host			= <TMPL_VAR NAME=DB_HOST>
 	sql_user			= <TMPL_VAR NAME=DB_USER>
 	sql_pass			= <TMPL_VAR NAME=DB_PASS>
@@ -14,12 +12,12 @@ source <TMPL_VAR NAME=SOURCE>_source
 
 <TMPL_IF NAME=GROUP_LOOP>
 <TMPL_LOOP NAME=GROUP_LOOP>
-    sql_group_column    = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN>
+    sql_attr_uint       = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN>
 </TMPL_LOOP>
 </TMPL_IF>
 <TMPL_IF NAME=DATE_LOOP>
 <TMPL_LOOP NAME=DATE_LOOP>
-    sql_date_column     = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=DATE_COLUMN>
+    sql_attr_timestamp  = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=DATE_COLUMN>
 </TMPL_LOOP>
 </TMPL_IF>
     sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
@@ -28,9 +26,11 @@ source <TMPL_VAR NAME=SOURCE>_source
 
 index <TMPL_VAR NAME=SOURCE>_index
 {
-	source			= <TMPL_VAR NAME=SOURCE>_source
-	path			= <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=SOURCE>_index
-	morphology		= <TMPL_VAR NAME=MORPHOLOGY>
+    html_strip          = 1
+	html_index_attrs	= img=alt,title; a=title;
+	source			    = <TMPL_VAR NAME=SOURCE>_source
+	path			    = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=SOURCE>_index
+	morphology		    = <TMPL_VAR NAME=MORPHOLOGY>
 }
 
 <TMPL_IF NAME=DELTA>
