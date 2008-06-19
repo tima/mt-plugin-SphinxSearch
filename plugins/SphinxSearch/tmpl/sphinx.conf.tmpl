@@ -12,12 +12,17 @@ source <TMPL_VAR NAME=SOURCE>_source
 
 <TMPL_IF NAME=GROUP_LOOP>
 <TMPL_LOOP NAME=GROUP_LOOP>
-    sql_attr_uint       = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=GROUP_COLUMN>
+    sql_attr_uint       = <TMPL_VAR NAME=GROUP_COLUMN>
 </TMPL_LOOP>
 </TMPL_IF>
 <TMPL_IF NAME=DATE_LOOP>
 <TMPL_LOOP NAME=DATE_LOOP>
-    sql_attr_timestamp  = <TMPL_VAR NAME=SOURCE>_<TMPL_VAR NAME=DATE_COLUMN>
+    sql_attr_timestamp  = <TMPL_VAR NAME=DATE_COLUMN>
+</TMPL_LOOP>
+</TMPL_IF>
+<TMPL_IF NAME=MVA_LOOP>
+<TMPL_LOOP NAME=MVA_LOOP>
+    sql_attr_multi      = uint <TMPL_VAR NAME=MVA_NAME> from query; <TMPL_VAR NAME=MVA_QUERY>
 </TMPL_LOOP>
 </TMPL_IF>
     sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
