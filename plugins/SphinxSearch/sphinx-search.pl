@@ -196,12 +196,23 @@ sub straight_sphinx_search {
 
     my $spx = _get_sphinx;
 
+    my @indexes = split (/,/, $app->param ('index') || 'entry');
+    my @classes;
+    foreach my $index (@indexes) {
+        my $class = $indexes{$index}->{class};
+        eval ("require $class;");
+        if ($@) {
+            return $app->error ("Error loading $class ($index): " . $@);
+        }
+        push @classes, $class;
+    }
+    
+    my %classes = map { $_ => 1 } @classes;
+    # if MT::Entry is in there, it should be first, just in case
+    @classes = ( delete $classes{'MT::Entry'} ? ('MT::Entry') : (), keys %classes);
+
     my $index = $app->param ('index') || 'entry';
     my $class = $indexes{ $index }->{class};
-    eval ("require $class;");
-    if ($@) {
-        return $app->error ("Error loading $class ($index): " . $@);
-    }
     my $search_keyword = $app->{search_string};
     
     my $sort_mode = {};
@@ -266,7 +277,7 @@ sub straight_sphinx_search {
     
     my $match_mode = $app->param ('match_mode') || 'all';
     
-    my $results = $class->sphinx_search ($search_keyword, 
+    my $results = $plugin->sphinx_search (\@classes, $search_keyword, 
         Filters         => $filters,
         RangeFilters    => $range_filters,
         Sort            => $sort_mode, 
@@ -507,12 +518,26 @@ sub _process_extended_sort {
 
 sub sphinx_search {
     my $plugin = shift;
-    my ($class, $search, %params) = @_;
-    
-    my $datasource = $class->datasource;
-    
-    return () if (!exists $indexes{ $datasource });
-    
+    my ($classes, $search, %params) = @_;
+
+    my @classes;
+    if (ref $classes) {
+        @classes = @$classes;
+    }
+    else {
+        @classes = ($classes);
+    }
+
+    # I'm sure there's a better way to do this bit
+    # but it's working for now
+    my $class;
+    my $datasource;
+    for my $c (reverse @classes) {
+        $class = $c;
+        $datasource = $class->datasource;
+        return () if (!exists $indexes{ $datasource });
+    }
+        
     my $spx = _get_sphinx();
     
     if (exists $params{Filters}) {
@@ -563,7 +588,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit);
     
-    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta_index" : '' ));
+    my $results = $spx->Query ($search, join ( ' ', map { my $ds = $_->datasource; $ds . '_index' . ( $indexes{$ds}->{delta} ? " ${ds}_delta_index" : '' ) } @classes ) );
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
@@ -575,7 +600,7 @@ sub sphinx_search {
     }
 
     my @result_objs = ();
-    my $meth = $indexes{ $datasource }->{id_to_obj};
+    my $meth = $indexes{ $datasource }->{id_to_obj} or die "No id_to_obj method for $datasource";
     foreach my $match (@{$results->{ matches }}) {
         my $id = $match->{ doc };
         my $o = $meth->($id) or next;
