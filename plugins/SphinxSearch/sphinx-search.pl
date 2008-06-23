@@ -739,7 +739,7 @@ sub search_result_excerpt_tag {
 
 sub search_all_result_tag {
     require MT::App;
-    MT::App->instance->param ('searchall');
+    MT::App->instance->param ('searchall') ? 1 : 0;
 }
 
 1;
