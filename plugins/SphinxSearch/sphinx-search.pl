@@ -64,6 +64,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchMatchMode'       => \&search_match_mode_tag,
             
             'SearchResultExcerpt'   => \&search_result_excerpt_tag,
+            
+            'SearchAllResult'       => \&search_all_result_tag,
         },
         
         conditional_tags    => {
@@ -727,6 +729,11 @@ sub search_result_excerpt_tag {
         
     my ($handler) = $ctx->handler_for ('EntryExcerpt');
     return $handler->($ctx, $args);
+}
+
+sub search_all_result_tag {
+    require MT::App;
+    MT::App->instance->param ('searchall');
 }
 
 1;
