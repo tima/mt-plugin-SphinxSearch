@@ -176,7 +176,9 @@ sub result_count_tag {
 
 sub straight_sphinx_search {
     my $app = shift;
-    return 1 unless $app->{search_string} =~ /\S/;
+
+    # Skip out unless either there *is* a search term, or we're explicitly searching all
+    return 1 unless ($app->{search_string} =~ /\S/ || $app->param ('searchall'));
 
     require MT::Log;
     my $blog_id;
