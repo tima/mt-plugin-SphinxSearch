@@ -247,10 +247,16 @@ sub straight_sphinx_search {
     my $range_filters = {};
     
     if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
+        my @all_cats;
         require MT::Category;
-        my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_basename });
-        if (@cats) {
-            $filters->{category} = [ map { $_->id } @cats ];
+        foreach my $cat_base (split (/,/, $cat_basename)) {
+            my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_base });
+            if (@cats) {
+                push @all_cats, @cats;
+            }
+        }
+        if (@all_cats) {
+            $filters->{category} = [ map { $_->id } @all_cats ];
         }
     }
     
