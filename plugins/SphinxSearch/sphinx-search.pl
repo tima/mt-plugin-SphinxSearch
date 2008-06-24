@@ -376,6 +376,7 @@ sub gen_sphinx_conf {
     $params{ morphology } = $plugin->get_config_value ('index_morphology', 'system') || 'none';
  
     my %info_query;
+    my %delta_query;
     my %query;
     my %mva;
     foreach my $source (keys %indexes) {
@@ -401,6 +402,14 @@ sub gen_sphinx_conf {
                 push @{$mva{$source}}, { mva_query => $mva_query, mva_name => $mva };
             }            
         }
+        
+        if (my $delta = $indexes{$source}->{delta}) {
+            $delta_query{$source} = $query{$source};
+            $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
+            if (exists $indexes{$source}->{date_columns}->{$delta}) {
+                $delta_query{$source} .= "DATE_ADD(${source}_${delta}, INTERVAL 36 HOUR) > NOW()";
+            }
+        }
     }
     $params{ source_loop } = [
         map {
@@ -410,7 +419,7 @@ sub gen_sphinx_conf {
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
-                 delta  => $indexes{$_}->{delta},
+                 delta_query  => $delta_query{$_},
                  mva_loop   => $mva{$_} || [],
                 } 
         }
