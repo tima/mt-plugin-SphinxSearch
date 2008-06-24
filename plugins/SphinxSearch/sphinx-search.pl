@@ -66,6 +66,10 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchResultExcerpt'   => \&search_result_excerpt_tag,
             
             'SearchAllResult'       => \&search_all_result_tag,
+            
+            'SearchTotalPages'      => \&search_total_pages_tag,
+            'SearchNextPage'        => \&search_next_page_tag,
+            'SearchPreviousPage'    => \&search_previous_page_tag,
         },
         
         conditional_tags    => {
@@ -73,6 +77,9 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'IfNotCurrentSearchResultsPage' => sub { !if_current_search_results_page_conditional_tag (@_) },
             'IfMultipleSearchResultsPages'  => \&if_multiple_search_results_pages_conditional_tag,
             'IfSingleSearchResultsPage'     => sub { !if_multiple_search_results_pages_conditional_tag (@_) },
+            
+            'IfFirstSearchResultsPage'      => \&if_first_search_results_page_conditional_tag,
+            'IfLastSearchResultsPage'       => \&if_last_search_results_page_conditional_tag,
         },
         
 
@@ -776,6 +783,39 @@ sub search_result_excerpt_tag {
 sub search_all_result_tag {
     require MT::App;
     MT::App->instance->param ('searchall') ? 1 : 0;
+}
+
+sub search_total_pages_tag {
+    require MT::Request;
+    MT::Request->instance->stash ('sphinx_pages_number');
+}
+
+sub search_next_page_tag {
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $current_page = $r->stash ('sphinx_pages_current');
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    
+    return $current_page >= $number_pages ? '' : $current_page + 1;
+}
+
+sub search_previous_page_tag {
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $current_page = $r->stash ('sphinx_pages_current');
+    
+    return $current_page > 1 ? $current_page - 1 : '';
+}
+
+sub if_first_search_results_page_conditional_tag {
+    require MT::Request;
+    return MT::Request->instance->stash ('sphinx_pages_current') == 1;
+}
+
+sub if_last_search_results_page_conditional_tag {
+    require MT::Request;
+    my $r = MT::Request->instance;
+    return $r->stash ('sphinx_pages_current') == $r->stash ('sphinx_pages_number');
 }
 
 1;
