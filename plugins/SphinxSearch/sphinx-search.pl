@@ -314,6 +314,7 @@ sub straight_sphinx_search {
     
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
+    my $max    = MT::Entry->count ({ status => MT::Entry::RELEASE(), blog_id => \@blog_ids });
     
     my $match_mode = $app->param ('match_mode') || 'all';
     
@@ -324,6 +325,7 @@ sub straight_sphinx_search {
         Offset          => $offset, 
         Limit           => $limit,
         Match           => $match_mode,
+        Max             => $max,
     );
     my(%blogs, %hits);
     my $i = 0;
@@ -617,7 +619,8 @@ sub sphinx_search {
     }
     
     my $offset = 0;
-    my $limit = 200;
+    my $limit  = 200;
+    my $max    = 0;
     if (exists $params{Offset}) {
         $offset = $params{Offset};
     }
@@ -626,7 +629,11 @@ sub sphinx_search {
         $limit = $params{Limit};
     }
     
-    $spx->SetLimits ($offset, $limit);
+    if (exists $params{Max}) {
+        $max = $params{Max};
+    }
+    
+    $spx->SetLimits ($offset, $limit, $max);
     
     my $results = $spx->Query ($search, join ( ' ', map { my $ds = $_->datasource; $ds . '_index' . ( $indexes{$ds}->{delta} ? " ${ds}_delta_index" : '' ) } @classes ) );
     if (!$results) {
