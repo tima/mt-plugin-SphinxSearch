@@ -638,7 +638,20 @@ sub search_results_page_loop_container_tag {
     
     my $res = '';
     my $glue = $args->{glue} || '';
-    foreach my $page (1 .. $number_pages) {
+    my $lastn = $args->{lastn};
+    $lastn = 0 if (2 * $lastn + 1 > $number_pages);
+    my $low_end = !$lastn ? 1 : 
+                  $current_page - $lastn > 0 ? $current_page - $lastn : 
+                  1;
+    my $high_end = !$lastn ? $number_pages : 
+                   $current_page + $lastn > $number_pages ? $number_pages : 
+                   $current_page + $lastn;
+    my @pages = ($low_end .. $high_end);
+    while ($lastn && scalar @pages < 2 * $lastn + 1) {
+        unshift @pages, $pages[0] - 1 if ($pages[0] > 1);    
+        push @pages, $pages[$#pages] + 1 if ($pages[$#pages] < $number_pages);
+    }
+    for my $page (@pages) {
         local $ctx->{__stash}{sphinx_page_number} = $page;
         # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
         local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
