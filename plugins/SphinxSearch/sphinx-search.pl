@@ -55,6 +55,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
             'SearchNextPage'        => \&search_next_page_tag,
             'SearchPreviousPage'    => \&search_previous_page_tag,
+            'SearchCategories'      => \&search_categories_container_tag,
         },
         
         template_tags   => {
@@ -288,6 +289,9 @@ sub straight_sphinx_search {
         if (@all_cats) {
             $filters->{category} = [ map { $_->id } @all_cats ];
         }
+        
+        require MT::Request;
+        MT::Request->instance->stash ('sphinx_search_categories', \@all_cats);
     }
     
     if ($app->param ('date_start') || $app->param ('date_end')) {
@@ -883,5 +887,49 @@ sub if_last_search_results_page_conditional_tag {
         return $current_page == $number_pages;
     }
 }
+
+sub search_categories_container_tag {
+    my($ctx, $args, $cond) = @_;
+
+    require MT::Request;
+    my $cats = MT::Request->instance->stash ('sphinx_search_categories');
+    return '' if (!$cats);
+    require MT::Placement;
+
+    my @cats = sort { $a->label cmp $b->label } @$cats;
+    my $res = '';
+    my $builder = $ctx->stash('builder');
+    my $tokens = $ctx->stash('tokens');
+    my $glue = exists $args->{glue} ? $args->{glue} : '';
+    ## In order for this handler to double as the handler for
+    ## <MTArchiveList archive_type="Category">, it needs to support
+    ## the <$MTArchiveLink$> and <$MTArchiveTitle$> tags
+    local $ctx->{inside_mt_categories} = 1;
+    for my $cat (@cats) {
+        local $ctx->{__stash}{category} = $cat;
+
+        # Don't think we need all these bits right now
+        # local $ctx->{__stash}{entries};
+        # local $ctx->{__stash}{category_count};
+        # local $ctx->{__stash}{blog_id} = $cat->blog_id;
+        # local $ctx->{__stash}{blog} = MT::Blog->load($cat->blog_id, { cached_ok => 1 });
+        # my @args = (
+        #     { blog_id => $cat->blog_id,
+        #       status => MT::Entry::RELEASE() },
+        #     { 'join' => [ 'MT::Placement', 'entry_id',
+        #                   { category_id => $cat->id } ],
+        #       'sort' => 'created_on',
+        #       direction => 'descend', });
+        # $ctx->{__stash}{category_count} = MT::Entry->count(@args);
+        # next unless $ctx->{__stash}{category_count} || $args->{show_empty};
+        
+        defined(my $out = $builder->build($ctx, $tokens, $cond))
+            or return $ctx->error( $builder->errstr );
+        $res .= $glue if $res ne '';
+        $res .= $out;
+    }
+    $res;
+}
+
 
 1;
