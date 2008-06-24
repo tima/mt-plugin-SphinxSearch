@@ -860,26 +860,26 @@ sub search_previous_page_tag {
 
 sub if_first_search_results_page_conditional_tag {
     my ($ctx, $args) = @_;
-    require MT::Request;
-    my $current_page = MT::Request->instance->stash ('sphinx_pages_current');
     if (my $first = $ctx->stash ('sphinx_page_loop_first')) {
-        return $current_page == $first;
+        return $ctx->stash ('sphinx_page_number') == $first;
     }
     else {
+        require MT::Request;
+        my $current_page = MT::Request->instance->stash ('sphinx_pages_current');
         return $current_page == 1;
     }
 }
 
 sub if_last_search_results_page_conditional_tag {
     my ($ctx, $args) = @_;
-    require MT::Request;
-    my $r = MT::Request->instance;
-    my $current_page = $r->stash ('sphinx_pages_current');
-    my $number_pages = $r->stash ('sphinx_pages_number');
     if (my $last = $ctx->stash ('sphinx_page_loop_last')) {
-        return $current_page == $last;
+        return $ctx->stash ('sphinx_page_number') == $last;
     }
     else {
+        require MT::Request;
+        my $r = MT::Request->instance;
+        my $current_page = $r->stash ('sphinx_pages_current');
+        my $number_pages = $r->stash ('sphinx_pages_number');
         return $current_page == $number_pages;
     }
 }
