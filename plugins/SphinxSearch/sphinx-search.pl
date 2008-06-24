@@ -142,6 +142,7 @@ sub init_search_app {
     {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
+        *MT::App::Search::_tag_search      = \&straight_sphinx_search;
         *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
         my $orig_results = \&MT::App::Search::Context::_hdlr_results;
         *MT::App::Search::Context::_hdlr_results = sub {
@@ -244,6 +245,28 @@ sub straight_sphinx_search {
     my $filters = {
         blog_id => \@blog_ids,
     };
+
+    # if it's a tag search,
+    # grab all the tag ids we can find for a filter
+    # and nix the search keyword
+    if ($app->{searchparam}{Type} eq 'tag') {
+        require MT::Tag;
+        my $tags = $app->{search_string};
+        my @tag_names = MT::Tag->split(',', $tags);
+        my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
+        my @tags = MT::Tag->load({ name => [ keys %tags ] });
+        my @tag_ids;
+        foreach (@tags) {
+            push @tag_ids, $_->id;
+            my @more = MT::Tag->load({ n8d_id => $_->n8d_id ? $_->n8d_id : $_->id });
+            push @tag_ids, $_->id foreach @more;
+        }
+        @tag_ids = ( 0 ) unless @tags;
+        
+        $filters->{tag} = \@tag_ids;
+        $search_keyword = undef;
+    }
+
     my $range_filters = {};
     
     if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
