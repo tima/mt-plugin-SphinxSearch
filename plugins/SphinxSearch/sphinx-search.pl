@@ -53,6 +53,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
         
         container_tags  => {
             'SearchResultsPageLoop'  => \&search_results_page_loop_container_tag,
+            'SearchNextPage'        => \&search_next_page_tag,
+            'SearchPreviousPage'    => \&search_previous_page_tag,
         },
         
         template_tags   => {
@@ -68,8 +70,6 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchAllResult'       => \&search_all_result_tag,
             
             'SearchTotalPages'      => \&search_total_pages_tag,
-            'SearchNextPage'        => \&search_next_page_tag,
-            'SearchPreviousPage'    => \&search_previous_page_tag,
         },
         
         conditional_tags    => {
@@ -681,6 +681,9 @@ sub search_results_page_loop_container_tag {
         unshift @pages, $pages[0] - 1 if ($pages[0] > 1);    
         push @pages, $pages[$#pages] + 1 if ($pages[$#pages] < $number_pages);
     }
+    
+    local $ctx->{__stash}{sphinx_page_loop_first} = $pages[0];
+    local $ctx->{__stash}{sphinx_page_loop_last}  = $pages[$#pages];
     for my $page (@pages) {
         local $ctx->{__stash}{sphinx_page_number} = $page;
         # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
@@ -791,31 +794,78 @@ sub search_total_pages_tag {
 }
 
 sub search_next_page_tag {
+    my ($ctx, $args, $cond) = @_;
     require MT::Request;
     my $r = MT::Request->instance;
     my $current_page = $r->stash ('sphinx_pages_current');
     my $number_pages = $r->stash ('sphinx_pages_number');
     
-    return $current_page >= $number_pages ? '' : $current_page + 1;
+    return '' if ($current_page >= $number_pages);
+
+    my $page = $current_page + 1;
+    
+    my $limit   = $r->stash ('sphinx_pages_limit');
+    my $builder = $ctx->stash ('builder');
+    my $tokens  = $ctx->stash ('tokens');
+    
+    local $ctx->{__stash}{sphinx_page_number} = $page;
+    # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
+    local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
+    defined (my $out = $builder->build ($ctx, $tokens, {
+        %$cond,
+        IfCurrentSearchResultsPage => ($page == $current_page),
+    })) or return $ctx->error ($builder->errstr);
+    $out;
 }
 
 sub search_previous_page_tag {
+    my ($ctx, $args, $cond) = @_;
     require MT::Request;
     my $r = MT::Request->instance;
     my $current_page = $r->stash ('sphinx_pages_current');
     
-    return $current_page > 1 ? $current_page - 1 : '';
+    return '' if ($current_page <= 1);
+
+    my $page = $current_page - 1;
+
+    my $limit   = $r->stash ('sphinx_pages_limit');
+    my $builder = $ctx->stash ('builder');
+    my $tokens  = $ctx->stash ('tokens');
+
+    local $ctx->{__stash}{sphinx_page_number} = $page;
+    # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
+    local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
+    defined (my $out = $builder->build ($ctx, $tokens, {
+        %$cond,
+        IfCurrentSearchResultsPage => ($page == $current_page),
+    })) or return $ctx->error ($builder->errstr);
+    $out;
 }
 
 sub if_first_search_results_page_conditional_tag {
+    my ($ctx, $args) = @_;
     require MT::Request;
-    return MT::Request->instance->stash ('sphinx_pages_current') == 1;
+    my $current_page = MT::Request->instance->stash ('sphinx_pages_current');
+    if (my $first = $ctx->stash ('sphinx_page_loop_first')) {
+        return $current_page == $first;
+    }
+    else {
+        return $current_page == 1;
+    }
 }
 
 sub if_last_search_results_page_conditional_tag {
+    my ($ctx, $args) = @_;
     require MT::Request;
     my $r = MT::Request->instance;
-    return $r->stash ('sphinx_pages_current') == $r->stash ('sphinx_pages_number');
+    my $current_page = $r->stash ('sphinx_pages_current');
+    my $number_pages = $r->stash ('sphinx_pages_number');
+    if (my $last = $ctx->stash ('sphinx_page_loop_last')) {
+        return $current_page == $last;
+    }
+    else {
+        return $current_page == $number_pages;
+    }
 }
 
 1;
