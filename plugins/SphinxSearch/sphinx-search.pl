@@ -295,6 +295,14 @@ sub straight_sphinx_search {
         MT::Request->instance->stash ('sphinx_search_categories', \@all_cats);
     }
     
+    if (my $author = $app->param ('author')) {
+        require MT::Author;
+        my @authors = MT::Author->load ({ name => $author });
+        if (@authors) {
+            $filters->{author_id} = [ map { $_->id } @authors ];
+        }
+    }
+    
     if ($app->param ('date_start') || $app->param ('date_end')) {
         my $date_start = $app->param ('date_start');
         if ($date_start) {
