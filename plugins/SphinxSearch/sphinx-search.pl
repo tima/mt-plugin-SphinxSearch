@@ -81,6 +81,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             
             'IfFirstSearchResultsPage'      => \&if_first_search_results_page_conditional_tag,
             'IfLastSearchResultsPage'       => \&if_last_search_results_page_conditional_tag,
+            
+            'IfIndexSearched'               => \&if_index_searched_conditional_tag,
         },
         
 
@@ -157,6 +159,13 @@ sub init_search_app {
         *MT::App::Search::Context::_hdlr_results = sub {
             _resort_sphinx_results (@_);
             $orig_results->(@_);
+        };
+        
+        my $orig_init = \&MT::App::Search::Context::init;
+        *MT::App::Search::Context::init = sub {
+            my $res = $orig_init->(@_);
+            _sphinx_search_context_init (@_);
+            return $res;
         }
     }
 
@@ -170,6 +179,19 @@ sub _resort_sphinx_results {
     $results = [ sort { $a->{entry}->{__sphinx_search_index} <=> $b->{entry}->{__sphinx_search_index} } @$results ];
     $ctx->stash ('results', $results);
 }
+
+sub _sphinx_search_context_init {
+    my $ctx = shift;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $stash_name = $r->stash ('sphinx_stash_name');
+    my $stash_results = $r->stash ('sphinx_results');
+    if ($stash_name && $stash_results) {
+        $ctx->stash ($stash_name, $stash_results);
+    }
+}
+
 
 sub _get_sphinx {
     my $spx = Sphinx->new;
@@ -352,10 +374,18 @@ sub straight_sphinx_search {
     );
     my(%blogs, %hits);
     my $i = 0;
-    foreach my $o (@{$results->{result_objs}}) {
-        my $blog_id = $o->blog_id;
-        $o->{__sphinx_search_index} = $i++;
-        $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
+    if (my $stash = $indexes{$indexes[0]}->{stash}) {
+        require MT::Request;
+        my $r = MT::Request->instance;
+        $r->stash ('sphinx_stash_name', $stash);
+        $r->stash ('sphinx_results', $results->{result_objs});        
+    }
+    else {
+        foreach my $o (@{$results->{result_objs}}) {
+            my $blog_id = $o->blog_id;
+            $o->{__sphinx_search_index} = $i++;
+            $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
+        }        
     }
     
     my $num_pages = ceil ($results->{query_results}->{total} / $limit);
@@ -363,6 +393,7 @@ sub straight_sphinx_search {
     
     require MT::Request;
     my $r = MT::Request->instance;
+    $r->stash ('sphinx_searched_indexes', [ @indexes ]);
     $r->stash ('sphinx_results_total', $results->{query_results}->{total});
     $r->stash ('sphinx_results_total_found', $results->{query_results}->{total_found});
     $r->stash ('sphinx_pages_number', $num_pages);
@@ -540,6 +571,7 @@ sub sphinx_init {
     };
     $indexes{ $datasource }->{class} = $class;
     $indexes{ $datasource }->{delta} = $params{delta};
+    $indexes{ $datasource }->{stash} = $params{stash};
     
     if (exists $defs->{ blog_id }) {
         $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
@@ -952,5 +984,13 @@ sub search_categories_container_tag {
     $res;
 }
 
+sub if_index_searched_conditional_tag {
+    my ($ctx, $args) = @_;
+    my $index = $args->{name} || $args->{index};
+    return 0 if (!$index);
+    require MT::Request;
+    my $indexes = MT::Request->instance->stash ('sphinx_searched_indexes');
+    return $indexes && scalar grep { $_ eq $index } @$indexes;
+}
 
 1;
