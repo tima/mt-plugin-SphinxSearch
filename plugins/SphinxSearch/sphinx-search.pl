@@ -325,6 +325,16 @@ sub straight_sphinx_search {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
+    # General catch-all for filters
+    my %params = $app->param_hash;
+    for my $filter (map { s/^filter_//; $_ } grep { /^filter_/ } keys %params) {
+        $filters->{$filter} = [ $app->param ("filter_$filter") ];
+    }
+    for my $filter (map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params) {
+        require String::CRC32;
+        $filters->{$filter . '_crc32'} = [ String::CRC32::crc32 ($app->param ("sfilter_$filter")) ];
+    }
+    
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
     my $max    = MT::Entry->count ({ status => MT::Entry::RELEASE(), blog_id => \@blog_ids });
@@ -394,9 +404,10 @@ sub gen_sphinx_conf {
     my %mva;
     foreach my $source (keys %indexes) {
         $query{$source} = "SELECT " . join(", ", map { 
-            $indexes{$source}->{date_columns}->{$_} ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $indexes{$source}->{group_columns}->{$_} ? "${source}_$_ as $_" :
-                                                      $source . '_' . $_
+            $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
+            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
+            $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
+                                                              $source . '_' . $_
             } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
             " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
@@ -431,6 +442,7 @@ sub gen_sphinx_conf {
                  query  => $query{$_},
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
+                 string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
                  mva_loop   => $mva{$_} || [],
@@ -534,7 +546,7 @@ sub sphinx_init {
     }
     
     if (exists $params{group_columns}) {
-        $indexes{ $datasource }->{ group_columns }->{$_}++ foreach (@{$params{group_columns}});
+        $indexes{ $datasource }->{ $defs->{$_}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$_}++ foreach (@{$params{group_columns}});
     }
     
     if ($props->{audit}) {
