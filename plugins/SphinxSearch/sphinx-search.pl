@@ -96,7 +96,8 @@ MT->add_plugin ($plugin);
 require MT::Entry;
 require MT::Comment;
 MT::Entry->sphinx_init (
-    select_values => { status => MT::Entry::RELEASE }, 
+    select_values => { status => MT::Entry::RELEASE },
+    group_columns   => [ 'author_id' ],
     mva => {
         category    => {
             to      => 'MT::Category',
