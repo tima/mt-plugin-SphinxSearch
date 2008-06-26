@@ -71,6 +71,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchAllResult'       => \&search_all_result_tag,
             
             'SearchTotalPages'      => \&search_total_pages_tag,
+            
+            'SearchFilterValue'     => \&search_filter_value_tag,
         },
         
         conditional_tags    => {
@@ -83,6 +85,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'IfLastSearchResultsPage'       => \&if_last_search_results_page_conditional_tag,
             
             'IfIndexSearched'               => \&if_index_searched_conditional_tag,
+            
+            'IfSearchFiltered'              => \&if_search_filtered_conditional_tag,
         },
         
         callbacks   => {
@@ -192,6 +196,12 @@ sub _sphinx_search_context_init {
     my $stash_results = $r->stash ('sphinx_results');
     if ($stash_name && $stash_results) {
         $ctx->stash ($stash_name, $stash_results);
+    }
+    
+    if (my $filter_stash = $r->stash ('sphinx_filters')) {
+        while (my ($k, $v) = each %$filter_stash) {
+            $ctx->stash ($k, $v);
+        }
     }
 }
 
@@ -351,6 +361,8 @@ sub straight_sphinx_search {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
+    my $filter_stash;
+    
     # General catch-all for filters
     my %params = $app->param_hash;
     for my $filter (map { s/^filter_//; $_ } grep { /^filter_/ } keys %params) {
@@ -361,14 +373,31 @@ sub straight_sphinx_search {
             my @v = $class->load ({ $lookup => $app->param ("filter_$filter") });
             next unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
+            
+            if (my $stash = $indexes{$indexes[0]}->{mva}->{$filter}->{stash}) {
+                if (ref ($stash) eq 'ARRAY') {
+                    if ($#v) {
+                        $filter_stash->{$stash->[1]} = \@v;
+                    }
+                    else {
+                        $filter_stash->{$stash->[0]} = $v[0];
+                    }
+                }
+                else {
+                    $filter_stash->{$stash} = \@v;
+                }
+            }
+            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
         }
         else {
             $filters->{$filter} = [ $app->param ("filter_$filter") ];            
+            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
         }
     }
     for my $filter (map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params) {
         require String::CRC32;
         $filters->{$filter . '_crc32'} = [ String::CRC32::crc32 ($app->param ("sfilter_$filter")) ];
+        $filter_stash->{"sphinx_filter_$filter"} = $app->param ("sfilter_$filter");
     }
     
     my $offset = $app->param ('offset') || 0;
@@ -414,6 +443,7 @@ sub straight_sphinx_search {
     $r->stash ('sphinx_pages_current', $cur_page);
     $r->stash ('sphinx_pages_offset', $offset);
     $r->stash ('sphinx_pages_limit', $limit);
+    $r->stash ('sphinx_filters', $filter_stash);
     1;
 }
 
@@ -1023,5 +1053,23 @@ sub pre_load_template {
     }
 }
 
+sub if_search_filtered_conditional_tag {
+    my ($ctx, $args) = @_;
+    my $filter_name = $args->{name} || $args->{filter};
+    if ($filter_name) {
+        return $ctx->stash ("sphinx_filter_$filter_name") ? 1 : 0;        
+    }
+    else {
+        require MT::Request;
+        return MT::Request->instance->stash ('sphinx_filters');
+    }
+}
+
+sub search_filter_value_tag {
+    my ($ctx, $args) = @_;
+    my $filter_name = $args->{name} || $args->{filter} or return $ctx->error ('filter or name required');
+    my $filter_value = $ctx->stash ("sphinx_filter_$filter_name");
+    return $filter_value ? $filter_value : '';
+}
 
 1;
