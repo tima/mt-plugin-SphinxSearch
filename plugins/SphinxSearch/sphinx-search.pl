@@ -256,19 +256,20 @@ sub straight_sphinx_search {
     
     my $sort_mode = {};
     my $sort_mode_param = $app->param ('sort_mode') || 'descend';
+    my $sort_by_param   = $app->param ('sort_by') || 'created_on';
     
     if ($sort_mode_param eq 'descend') {
-        $sort_mode = { Descend => 'created_on' };
+        $sort_mode = { Descend => $sort_by_param };
     }
     elsif ($sort_mode_param eq 'ascend') {
-        $sort_mode = { Ascend => 'created_on' };
+        $sort_mode = { Ascend => $sort_by_param };
     }
     elsif ($sort_mode_param eq 'relevance') {
         $sort_mode = {};
     }
     elsif ($sort_mode_param eq 'extended') {
         if (my $extended_sort = $app->param ('extended_sort')) {
-            $sort_mode = { Extended => $extended_sort };            
+            $sort_mode = { Extended => $extended_sort };
         }
     }
     elsif ($sort_mode_param eq 'segments') {
@@ -353,7 +354,17 @@ sub straight_sphinx_search {
     # General catch-all for filters
     my %params = $app->param_hash;
     for my $filter (map { s/^filter_//; $_ } grep { /^filter_/ } keys %params) {
-        $filters->{$filter} = [ $app->param ("filter_$filter") ];
+        if (my $lookup = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup}) {
+            my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
+            eval ("require $class;");
+            next if ($@);
+            my @v = $class->load ({ $lookup => $app->param ("filter_$filter") });
+            next unless (@v);
+            $filters->{$filter} = [ map { $_->id } @v ];
+        }
+        else {
+            $filters->{$filter} = [ $app->param ("filter_$filter") ];            
+        }
     }
     for my $filter (map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params) {
         require String::CRC32;
