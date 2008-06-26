@@ -87,6 +87,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'IfIndexSearched'               => \&if_index_searched_conditional_tag,
             
             'IfSearchFiltered'              => \&if_search_filtered_conditional_tag,
+            'IfSearchSortedBy'              => \&if_search_sorted_by_conditional_tag,
         },
         
         callbacks   => {
@@ -444,6 +445,7 @@ sub straight_sphinx_search {
     $r->stash ('sphinx_pages_offset', $offset);
     $r->stash ('sphinx_pages_limit', $limit);
     $r->stash ('sphinx_filters', $filter_stash);
+    $r->stash ('sphinx_sort_by', $sort_by_param);
     1;
 }
 
@@ -1071,5 +1073,14 @@ sub search_filter_value_tag {
     my $filter_value = $ctx->stash ("sphinx_filter_$filter_name");
     return $filter_value ? $filter_value : '';
 }
+
+sub if_search_sorted_by_conditional_tag {
+    my ($ctx, $args) = @_;
+    my $sort_arg = $args->{sort} or return 0;
+    require MT::Request;
+    my $sort_by = MT::Reqeust->instance->stash ('sphinx_sort_by');
+    return $sort_by eq $sort_arg;
+}
+
 
 1;
