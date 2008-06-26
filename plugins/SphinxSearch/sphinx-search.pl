@@ -85,7 +85,10 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'IfIndexSearched'               => \&if_index_searched_conditional_tag,
         },
         
-
+        callbacks   => {
+            'MT::Template::pre_load'  => \&pre_load_template,
+        },
+        
 });
 MT->add_plugin ($plugin);
 
@@ -992,5 +995,22 @@ sub if_index_searched_conditional_tag {
     my $indexes = MT::Request->instance->stash ('sphinx_searched_indexes');
     return $indexes && scalar grep { $_ eq $index } @$indexes;
 }
+
+sub pre_load_template {
+    my ($cb, $params) = @_;
+    
+    # skip out of here if this isn't a search app
+    # we don't want to screw anything up
+    require MT::App;
+    my $app = MT::App->instance;
+    return unless ($app && $app->isa ('MT::App::Search'));
+    
+    
+    return unless (my $tmpl_id = $app->param ('tmpl_id'));
+    if ('HASH' eq ref ($params->[1]) && scalar keys %{$params->[1]} == 2 && $params->[1]->{blog_id} && $params->[1]->{type} eq 'search_template') {
+        $params->[1] = $tmpl_id;
+    }
+}
+
 
 1;
