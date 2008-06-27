@@ -1092,7 +1092,7 @@ sub search_parameters_tag {
     my $app = MT::App->instance;
     my %params = $app->param_hash;
     require MT::Util;
-    return join ('&', map { $_ . '=' . MT::Util::escape_html ($params{$_}) } grep { !exists $skips{$_} }keys %params);
+    return join ('&', map { $_ . '=' . MT::Util::encode_url ($params{$_}) } grep { !exists $skips{$_} }keys %params);
 }
 
 1;
