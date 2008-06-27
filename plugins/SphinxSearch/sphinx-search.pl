@@ -481,13 +481,30 @@ sub gen_sphinx_conf {
     my %delta_query;
     my %query;
     my %mva;
+    my %counts;
     foreach my $source (keys %indexes) {
+        # build any count columns first
+        if (my $counts = $indexes{$source}->{count_columns}) {
+            for my $count (keys %$counts) {
+                my $what_class = $counts->{$count}->{what};
+                my $with_column = $counts->{$count}->{with};
+                
+                eval ("require $what_class;");
+                next if ($@);
+                
+                my $what_ds = $what_class->datasource;
+                my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $indexes{$source}->{id_column};
+                $counts{$source}->{$count} = $count_query;
+            }            
+        }
+
         $query{$source} = "SELECT " . join(", ", map { 
             $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
             $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
             $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
+            $counts{$source}->{$_}                          ? "(" . $counts{$source}->{$_} . ") as $_" :
                                                               $source . '_' . $_
-            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
+            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } }, keys %{$counts{$source}} ) ) . 
             " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
             $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
@@ -506,6 +523,7 @@ sub gen_sphinx_conf {
             }            
         }
         
+        
         if (my $delta = $indexes{$source}->{delta}) {
             $delta_query{$source} = $query{$source};
             $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
@@ -520,7 +538,7 @@ sub gen_sphinx_conf {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
+                 group_loop    => [ map { { group_column => $_ } } ( keys %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
@@ -620,6 +638,7 @@ sub sphinx_init {
     $indexes{ $datasource }->{class} = $class;
     $indexes{ $datasource }->{delta} = $params{delta};
     $indexes{ $datasource }->{stash} = $params{stash};
+    $indexes{ $datasource }->{count_columns} = $params{count_columns};
     
     if (exists $defs->{ blog_id }) {
         $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
