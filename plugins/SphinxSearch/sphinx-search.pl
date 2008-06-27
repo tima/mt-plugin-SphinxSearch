@@ -1107,7 +1107,7 @@ sub if_search_sorted_by_conditional_tag {
     my ($ctx, $args) = @_;
     my $sort_arg = $args->{sort} or return 0;
     require MT::Request;
-    my $sort_by = MT::Reqeust->instance->stash ('sphinx_sort_by');
+    my $sort_by = MT::Request->instance->stash ('sphinx_sort_by');
     return $sort_by eq $sort_arg;
 }
 
