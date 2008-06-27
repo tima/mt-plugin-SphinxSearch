@@ -73,6 +73,8 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchTotalPages'      => \&search_total_pages_tag,
             
             'SearchFilterValue'     => \&search_filter_value_tag,
+            
+            'SearchParameters'      => \&search_parameters_tag,
         },
         
         conditional_tags    => {
@@ -1082,5 +1084,15 @@ sub if_search_sorted_by_conditional_tag {
     return $sort_by eq $sort_arg;
 }
 
+sub search_parameters_tag {
+    my ($ctx, $args) = @_;
+    
+    my %skips = map { $_ => 1 } split (/,/, $args->{skip});
+    require MT::App;
+    my $app = MT::App->instance;
+    my %params = $app->param_hash;
+    require MT::Util;
+    return join ('&', map { $_ . '=' . MT::Util::escape_html ($params{$_}) } grep { !exists $skips{$_} }keys %params);
+}
 
 1;
