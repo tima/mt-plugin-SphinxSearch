@@ -75,6 +75,9 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'SearchFilterValue'     => \&search_filter_value_tag,
             
             'SearchParameters'      => \&search_parameters_tag,
+            
+            'SearchDateStart'       => \&search_date_start_tag,
+            'SearchDateEnd'         => \&search_date_end_tag,
         },
         
         conditional_tags    => {
@@ -90,6 +93,9 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             
             'IfSearchFiltered'              => \&if_search_filtered_conditional_tag,
             'IfSearchSortedBy'              => \&if_search_sorted_by_conditional_tag,
+            
+            'IfSearchDateStart'             => \&if_search_date_start_conditional_tag,
+            'IfSearchDateEnd'               => \&if_search_date_end_conditional_tag,
         },
         
         callbacks   => {
@@ -1132,5 +1138,36 @@ sub search_parameters_tag {
     require MT::Util;
     return join ('&', map { $_ . '=' . MT::Util::encode_url ($params{$_}) } grep { !exists $skips{$_} }keys %params);
 }
+
+sub if_search_date_start_conditional_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    return defined $app->param ('date_start');
+}
+
+sub if_search_date_end_conditional_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    return defined $app->param ('date_end');
+}
+
+sub search_date_start_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    local $_[0]->{current_timestamp} = $app->param ('date_start') . '0000';
+    
+    require MT::Template::ContextHandlers;
+    MT::Template::ContextHandlers::_hdlr_date (@_);
+}
+
+sub search_date_end_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    local $_[0]->{current_timestamp} = $app->param ('date_end') . '0000';
+    
+    require MT::Template::ContextHandlers;
+    MT::Template::ContextHandlers::_hdlr_date (@_);
+}
+
 
 1;
