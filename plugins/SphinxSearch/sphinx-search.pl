@@ -502,7 +502,7 @@ sub _gen_sphinx_conf_tmpl {
 
         $query{$source} = "SELECT " . join(", ", map { 
             $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
+            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as " . $indexes{$source}->{group_columns}->{$_} :
             $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
             $counts{$source}->{$_}                          ? "(" . $counts{$source}->{$_} . ") as $_" :
                                                               $source . '_' . $_
@@ -540,7 +540,7 @@ sub _gen_sphinx_conf_tmpl {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } ( keys %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
+                 group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
@@ -651,11 +651,20 @@ sub sphinx_init {
     $indexes{ $datasource }->{count_columns} = $params{count_columns};
     
     if (exists $defs->{ blog_id }) {
-        $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
+        $indexes{ $datasource }->{ group_columns }->{ blog_id } = 'blog_id';
     }
     
     if (exists $params{group_columns}) {
-        $indexes{ $datasource }->{ $defs->{$_}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$_}++ foreach (@{$params{group_columns}});
+        for my $column (@{$params{group_columns}}) {
+            my $name;
+            if ('HASH' eq ref ($column)) {
+                ($column, $name) = each (%$column);
+            }
+            else {
+                $name = $column;
+            }
+            $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
+        }
     }
     
     if ($props->{audit}) {
