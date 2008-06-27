@@ -1155,9 +1155,9 @@ sub search_date_start_tag {
     require MT::App;
     my $app = MT::App->instance;
     local $_[0]->{current_timestamp} = $app->param ('date_start') . '0000';
-    
+        
     require MT::Template::ContextHandlers;
-    MT::Template::ContextHandlers::_hdlr_date (@_);
+    MT::Template::Context::_hdlr_date (@_);
 }
 
 sub search_date_end_tag {
@@ -1166,7 +1166,7 @@ sub search_date_end_tag {
     local $_[0]->{current_timestamp} = $app->param ('date_end') . '0000';
     
     require MT::Template::ContextHandlers;
-    MT::Template::ContextHandlers::_hdlr_date (@_);
+    MT::Template::Context::_hdlr_date (@_);
 }
 
 
