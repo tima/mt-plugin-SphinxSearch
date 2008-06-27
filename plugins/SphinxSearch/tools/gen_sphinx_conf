@@ -1,0 +1,58 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::Spec;
+use Getopt::Long;
+
+use Data::Dumper;
+
+my $mt_dir;
+my $verbose;
+
+my $bin_path;
+my $file_path;
+my $conf_path;
+
+BEGIN {
+    $verbose = 0;
+    GetOptions (
+        'mt_dir=s'  => \$mt_dir,
+        'verbose+'  => \$verbose,
+        'bin_path=s'    => \$bin_path,
+        'file_path=s'   => \$file_path,
+        'conf_path=s'   => \$conf_path,
+    );
+    
+    $mt_dir ||= $ENV{ MT_HOME };
+    
+    if (!$mt_dir) {
+        print STDERR "MT directory must be specified\n";
+        exit (1);
+    }
+    
+    unshift @INC, File::Spec->catdir ($mt_dir, "lib"), File::Spec->catdir ($mt_dir, "extlib");
+}
+
+use MT;
+use MT::App;
+
+my $mt = MT::App->new (Directory => $mt_dir) or die "Error starting MT: ", MT->errstr;
+my $plugin = MT::Plugin::SphinxSearch->instance;
+
+if ($bin_path) {
+    $plugin->set_config_value ('sphinx_path', $bin_path, 'system');
+}
+
+if ($file_path) {
+    $plugin->set_config_value ('sphinx_file_path', $file_path, 'system');
+}
+
+if ($conf_path) {
+    $plugin->set_config_value ('sphinx_conf_path', $conf_path, 'system');
+}
+
+my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
+my $str = $tmpl->output;
+print "$str\n";

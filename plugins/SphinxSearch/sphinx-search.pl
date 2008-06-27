@@ -460,12 +460,12 @@ sub _pid_path {
     return $sphinx_file_path;
 }
 
-sub gen_sphinx_conf {
-    my $app = shift;
-    
+sub _gen_sphinx_conf_tmpl {
+    my $plugin = shift;
     my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl') or die $plugin->errstr;
     my %params;
     
+    my $app = MT->instance;
     $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
     
     $params{ db_host } = $app->{cfg}->DBHost;
@@ -547,8 +547,16 @@ sub gen_sphinx_conf {
         }
         keys %indexes
     ];
+    $tmpl->param (%params);
+    $tmpl;
+}
+
+
+sub gen_sphinx_conf {
+    my $app = shift;
+    my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
     
-    my $str = $app->build_page ($tmpl, \%params);
+    my $str = $app->build_page ($tmpl);
     die $app->errstr if (!$str);
     $app->{no_print_body} = 1;
     $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
