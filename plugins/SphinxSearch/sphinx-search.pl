@@ -364,7 +364,9 @@ sub straight_sphinx_search {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
-    my $filter_stash;
+    my $filter_stash = {};
+    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$range_filters->{$_}}) foreach (keys %$range_filters);
+    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$filters->{$_}}) foreach (keys %$filters);
     
     # General catch-all for filters
     my %params = $app->param_hash;
