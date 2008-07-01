@@ -132,6 +132,10 @@ sub instance {
 
 my %indexes;
 
+sub sphinx_indexes {
+    return %indexes;
+}
+
 sub sphinx_indexer_task {
     my $plugin = shift;
     my $task = shift;
