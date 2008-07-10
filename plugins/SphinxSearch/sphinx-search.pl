@@ -179,12 +179,12 @@ sub init_search_app {
         *MT::App::Search::Context::_hdlr_results = sub {
             _resort_sphinx_results (@_);
             $orig_results->(@_);
-        };
+        };        
         
         # we need to short-circuit this as the search string has been stuffed
         # in the case of searchall=1
         my $orig_search_string = \&MT::App::Context::_hdlr_search_string;
-        *MT::App::Context::_hdlr_search_string = sub {
+        *MT::App::Search::Context::_hdlr_search_string = sub {
             $app->param ('searchall') ? '' : $orig_search_string->(@_);
         };
         
@@ -541,10 +541,17 @@ sub _gen_sphinx_conf_tmpl {
         if ($indexes{$source}->{mva}) {
             foreach my $mva (keys %{$indexes{$source}->{mva}}) {
                 my $cur_mva = $indexes{$source}->{mva}->{$mva};
-                my $mva_source = $cur_mva->{with}->datasource;
-                my $mva_query = "SELECT " . join (', ', map { "${mva_source}_$_" } @{$cur_mva->{by}}) . " from mt_" . $mva_source;
-                if (my $sel_values = $cur_mva->{select_values}) {
-                    $mva_query .= " WHERE " . join (" AND ", map { "${mva_source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
+                my $mva_query;
+                if (ref ($cur_mva)) {
+                    my $mva_source = $cur_mva->{with}->datasource;
+                    $mva_query = "SELECT " . join (', ', map { "${mva_source}_$_" } @{$cur_mva->{by}}) . " from mt_" . $mva_source;
+                    if (my $sel_values = $cur_mva->{select_values}) {
+                        $mva_query .= " WHERE " . join (" AND ", map { "${mva_source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
+                    }
+                    
+                }
+                else {
+                    $mva_query = $cur_mva;
                 }
                 push @{$mva{$source}}, { mva_query => $mva_query, mva_name => $mva };
             }            
