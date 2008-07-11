@@ -183,7 +183,7 @@ sub init_search_app {
         
         # we need to short-circuit this as the search string has been stuffed
         # in the case of searchall=1
-        my $orig_search_string = \&MT::App::Context::_hdlr_search_string;
+        my $orig_search_string = \&MT::App::Search::Context::_hdlr_search_string;
         *MT::App::Search::Context::_hdlr_search_string = sub {
             $app->param ('searchall') ? '' : $orig_search_string->(@_);
         };
