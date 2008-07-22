@@ -73,6 +73,8 @@ sub init_registry {
                 
                 'NextSearchResultsPage' => \&next_search_results_page,
                 'PreviousSearchResultsPage' => \&previous_search_results_page,              
+
+                'SearchAllResult'       => \&search_all_result_tag,
             },
             block   => {
                 'IfCurrentSearchResultsPage?'    => \&if_current_search_results_page_conditional_tag,
@@ -186,7 +188,9 @@ sub result_count_tag {
 
 sub straight_sphinx_search {
     my $app = shift;
-    return 1 unless $app->{search_string} =~ /\S/;
+
+    # Skip out unless either there *is* a search term, or we're explicitly searching all
+    return 1 unless ($app->{search_string} =~ /\S/ || $app->param ('searchall'));
 
     require MT::Log;
     my $blog_id;
@@ -253,10 +257,16 @@ sub straight_sphinx_search {
     my $range_filters = {};
     
     if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
+        my @all_cats;
         require MT::Category;
-        my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_basename });
-        if (@cats) {
-            $filters->{category} = [ map { $_->id } @cats ];
+        foreach my $cat_base (split (/,/, $cat_basename)) {
+            my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_base });
+            if (@cats) {
+                push @all_cats, @cats;
+            }
+        }
+        if (@all_cats) {
+            $filters->{category} = [ map { $_->id } @all_cats ];
         }
     }
     
@@ -758,5 +768,9 @@ sub previous_search_results_page {
     $current_page == 1 ? '' : $current_page - 1;
 }
 
+sub search_all_result_tag {
+    require MT::App;
+    MT::App->instance->param ('searchall');
+}
 
 1;
