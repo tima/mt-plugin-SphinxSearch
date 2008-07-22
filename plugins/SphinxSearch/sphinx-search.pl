@@ -91,6 +91,8 @@ sub init_registry {
                 
                 'IfFirstSearchResultsPage?'  => sub { !previous_search_results_page (@_) },
                 'IfLastSearchResultsPage?'   => sub { !next_search_results_page (@_) },
+
+                'IfIndexSearched?'               => \&if_index_searched_conditional_tag,
             },
         }      
     };
@@ -164,6 +166,13 @@ sub init_search_app {
         *MT::App::Search::Context::_hdlr_results = sub {
             _resort_sphinx_results (@_);
             $orig_results->(@_);
+        };
+        
+        my $orig_init = \&MT::App::Search::Context::init;
+        *MT::App::Search::Context::init = sub {
+            my $res = $orig_init->(@_);
+            _sphinx_search_context_init (@_);
+            return $res;
         }
     }
 
@@ -177,6 +186,19 @@ sub _resort_sphinx_results {
     $results = [ sort { $a->{entry}->{__sphinx_search_index} <=> $b->{entry}->{__sphinx_search_index} } @$results ];
     $ctx->stash ('results', $results);
 }
+
+sub _sphinx_search_context_init {
+    my $ctx = shift;
+    
+    require MT::Request;
+    my $r = MT::Request->instance;
+    my $stash_name = $r->stash ('sphinx_stash_name');
+    my $stash_results = $r->stash ('sphinx_results');
+    if ($stash_name && $stash_results) {
+        $ctx->stash ($stash_name, $stash_results);
+    }
+}
+
 
 sub _get_sphinx {
     my $spx = Sphinx->new;
@@ -302,6 +324,14 @@ sub straight_sphinx_search {
         MT::Request->instance->stash ('sphinx_search_categories', \@all_cats);
     }
     
+    if (my $author = $app->param ('author')) {
+        require MT::Author;
+        my @authors = MT::Author->load ({ name => $author });
+        if (@authors) {
+            $filters->{author_id} = [ map { $_->id } @authors ];
+        }
+    }
+    
     if ($app->param ('date_start') || $app->param ('date_end')) {
         my $date_start = $app->param ('date_start');
         if ($date_start) {
@@ -324,6 +354,16 @@ sub straight_sphinx_search {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
+    # General catch-all for filters
+    my %params = $app->param_hash;
+    for my $filter (map { s/^filter_//; $_ } grep { /^filter_/ } keys %params) {
+        $filters->{$filter} = [ $app->param ("filter_$filter") ];
+    }
+    for my $filter (map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params) {
+        require String::CRC32;
+        $filters->{$filter . '_crc32'} = [ String::CRC32::crc32 ($app->param ("sfilter_$filter")) ];
+    }
+    
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
     my $max    = MT::Entry->count ({ status => MT::Entry::RELEASE(), blog_id => \@blog_ids });
@@ -341,10 +381,18 @@ sub straight_sphinx_search {
     );
     my(%blogs, %hits);
     my $i = 0;
-    foreach my $o (@{$results->{result_objs}}) {
-        my $blog_id = $o->blog_id;
-        $o->{__sphinx_search_index} = $i++;
-        $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
+    if (my $stash = $indexes{$indexes[0]}->{stash}) {
+        require MT::Request;
+        my $r = MT::Request->instance;
+        $r->stash ('sphinx_stash_name', $stash);
+        $r->stash ('sphinx_results', $results->{result_objs});        
+    }
+    else {
+        foreach my $o (@{$results->{result_objs}}) {
+            my $blog_id = $o->blog_id;
+            $o->{__sphinx_search_index} = $i++;
+            $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
+        }        
     }
     
     my $num_pages = ceil ($results->{query_results}->{total} / $limit);
@@ -352,6 +400,7 @@ sub straight_sphinx_search {
     
     require MT::Request;
     my $r = MT::Request->instance;
+    $r->stash ('sphinx_searched_indexes', [ @indexes ]);
     $r->stash ('sphinx_results_total', $results->{query_results}->{total});
     $r->stash ('sphinx_results_total_found', $results->{query_results}->{total_found});
     $r->stash ('sphinx_pages_number', $num_pages);
@@ -393,9 +442,10 @@ sub gen_sphinx_conf {
     my %mva;
     foreach my $source (keys %indexes) {
         $query{$source} = "SELECT " . join(", ", map { 
-            $indexes{$source}->{date_columns}->{$_} ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $indexes{$source}->{group_columns}->{$_} ? "${source}_$_ as $_" :
-                                                      $source . '_' . $_
+            $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
+            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
+            $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
+                                                              $source . '_' . $_
             } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
             " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
@@ -430,6 +480,7 @@ sub gen_sphinx_conf {
                  query  => $query{$_},
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
+                 string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
                  mva_loop   => $mva{$_} || [],
@@ -527,13 +578,14 @@ sub sphinx_init {
     };
     $indexes{ $datasource }->{class} = $class;
     $indexes{ $datasource }->{delta} = $params{delta};
+    $indexes{ $datasource }->{stash} = $params{stash};
     
     if (exists $defs->{ blog_id }) {
         $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
     }
     
     if (exists $params{group_columns}) {
-        $indexes{ $datasource }->{ group_columns }->{$_}++ foreach (@{$params{group_columns}});
+        $indexes{ $datasource }->{ $defs->{$_}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$_}++ foreach (@{$params{group_columns}});
     }
     
     if ($props->{audit}) {
@@ -960,5 +1012,13 @@ sub search_categories_container_tag {
     $res;
 }
 
+sub if_index_searched_conditional_tag {
+    my ($ctx, $args) = @_;
+    my $index = $args->{name} || $args->{index};
+    return 0 if (!$index);
+    require MT::Request;
+    my $indexes = MT::Request->instance->stash ('sphinx_searched_indexes');
+    return $indexes && scalar grep { $_ eq $index } @$indexes;
+}
 
 1;
