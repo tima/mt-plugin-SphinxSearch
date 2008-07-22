@@ -467,12 +467,12 @@ sub _pid_path {
     return $sphinx_file_path;
 }
 
-sub gen_sphinx_conf {
-    my $app = shift;
-    
+sub _gen_sphinx_conf_tmpl {
+    my $plugin = shift;
     my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl') or die $plugin->errstr;
     my %params;
     
+    my $app = MT->instance;
     $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
     
     $params{ db_host } = $app->{cfg}->DBHost;
@@ -488,13 +488,30 @@ sub gen_sphinx_conf {
     my %delta_query;
     my %query;
     my %mva;
+    my %counts;
     foreach my $source (keys %indexes) {
+        # build any count columns first
+        if (my $counts = $indexes{$source}->{count_columns}) {
+            for my $count (keys %$counts) {
+                my $what_class = $counts->{$count}->{what};
+                my $with_column = $counts->{$count}->{with};
+                
+                eval ("require $what_class;");
+                next if ($@);
+                
+                my $what_ds = $what_class->datasource;
+                my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $indexes{$source}->{id_column};
+                $counts{$source}->{$count} = $count_query;
+            }            
+        }
+
         $query{$source} = "SELECT " . join(", ", map { 
             $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
             $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
             $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
+            $counts{$source}->{$_}                          ? "(" . $counts{$source}->{$_} . ") as $_" :
                                                               $source . '_' . $_
-            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
+            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } }, keys %{$counts{$source}} ) ) . 
             " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
             $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
@@ -513,6 +530,7 @@ sub gen_sphinx_conf {
             }            
         }
         
+        
         if (my $delta = $indexes{$source}->{delta}) {
             $delta_query{$source} = $query{$source};
             $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
@@ -527,7 +545,7 @@ sub gen_sphinx_conf {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
+                 group_loop    => [ map { { group_column => $_ } } ( keys %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
@@ -536,8 +554,16 @@ sub gen_sphinx_conf {
         }
         keys %indexes
     ];
+    $tmpl->param (%params);
+    $tmpl;
+}
+
+
+sub gen_sphinx_conf {
+    my $app = shift;
+    my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
     
-    my $str = $app->build_page ($tmpl, \%params);
+    my $str = $app->build_page ($tmpl);
     die $app->errstr if (!$str);
     $app->{no_print_body} = 1;
     $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
@@ -627,6 +653,7 @@ sub sphinx_init {
     $indexes{ $datasource }->{class} = $class;
     $indexes{ $datasource }->{delta} = $params{delta};
     $indexes{ $datasource }->{stash} = $params{stash};
+    $indexes{ $datasource }->{count_columns} = $params{count_columns};
     
     if (exists $defs->{ blog_id }) {
         $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
@@ -1108,7 +1135,7 @@ sub if_search_sorted_by_conditional_tag {
     my ($ctx, $args) = @_;
     my $sort_arg = $args->{sort} or return 0;
     require MT::Request;
-    my $sort_by = MT::Reqeust->instance->stash ('sphinx_sort_by');
+    my $sort_by = MT::Request->instance->stash ('sphinx_sort_by');
     return $sort_by eq $sort_arg;
 }
 
