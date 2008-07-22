@@ -117,6 +117,10 @@ sub init_registry {
 
 my %indexes;
 
+sub sphinx_indexes {
+    return %indexes;
+}
+
 sub sphinx_indexer_task {
     my $plugin = shift;
     my $task = shift;
@@ -184,6 +188,13 @@ sub init_search_app {
             $orig_results->(@_);
         };
         
+        # we need to short-circuit this as the search string has been stuffed
+        # in the case of searchall=1
+        my $orig_search_string = \&MT::App::Context::_hdlr_search_string;
+        *MT::App::Context::_hdlr_search_string = sub {
+            $app->param ('searchall') ? '' : $orig_search_string->(@_);
+        };
+        
         my $orig_init = \&MT::App::Search::Context::init;
         *MT::App::Search::Context::init = sub {
             my $res = $orig_init->(@_);
@@ -219,8 +230,16 @@ sub _sphinx_search_context_init {
             $ctx->stash ($k, $v);
         }
     }
+    
+    require MT::App;
+    my $app = MT::App->instance;
+    if ($app->param ('searchall')) {
+        # not cute, but it'll work
+        # and with the updated tag handler
+        # it shouldn't be exposed
+        $ctx->stash ('search_string', 'searchall')
+    }
 }
-
 
 sub _get_sphinx {
     my $spx = Sphinx->new;
@@ -1183,9 +1202,9 @@ sub search_date_start_tag {
     require MT::App;
     my $app = MT::App->instance;
     local $_[0]->{current_timestamp} = $app->param ('date_start') . '0000';
-    
+        
     require MT::Template::ContextHandlers;
-    MT::Template::ContextHandlers::_hdlr_date (@_);
+    MT::Template::Context::_hdlr_date (@_);
 }
 
 sub search_date_end_tag {
@@ -1194,7 +1213,7 @@ sub search_date_end_tag {
     local $_[0]->{current_timestamp} = $app->param ('date_end') . '0000';
     
     require MT::Template::ContextHandlers;
-    MT::Template::ContextHandlers::_hdlr_date (@_);
+    MT::Template::Context::_hdlr_date (@_);
 }
 
 
