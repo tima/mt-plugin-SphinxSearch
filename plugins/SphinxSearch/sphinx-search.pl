@@ -11,6 +11,8 @@ use Sphinx;
 use File::Spec;
 use POSIX;
 
+use MT::Util qw( ts2epoch );
+
 use vars qw( $VERSION $plugin );
 $VERSION = '0.99.8mt4';
 $plugin = MT::Plugin::SphinxSearch->new ({
@@ -88,7 +90,6 @@ sub init_registry {
     $plugin->registry ($reg);
 }
 
-
 my %indexes;
 
 sub sphinx_indexer_task {
@@ -122,7 +123,17 @@ sub init_apps {
 
     require MT::Entry;
     require MT::Comment;
-    MT::Entry->sphinx_init (select_values => { status => MT::Entry::RELEASE }, date_columns => { authored_on => 1 });
+    MT::Entry->sphinx_init (
+        select_values => { status => MT::Entry::RELEASE }, 
+        mva => {
+            category    => {
+                to      => 'MT::Category',
+                with    => 'MT::Placement',
+                by      => [ 'entry_id', 'category_id' ],
+            },
+        },
+        date_columns => { authored_on => 1 }
+    );
     MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
     
     if ($app->isa ('MT::App::Search')) {
@@ -195,12 +206,23 @@ sub straight_sphinx_search {
 
     my $spx = _get_sphinx;
 
+    my @indexes = split (/,/, $app->param ('index') || 'entry');
+    my @classes;
+    foreach my $index (@indexes) {
+        my $class = $indexes{$index}->{class};
+        eval ("require $class;");
+        if ($@) {
+            return $app->error ("Error loading $class ($index): " . $@);
+        }
+        push @classes, $class;
+    }
+    
+    my %classes = map { $_ => 1 } @classes;
+    # if MT::Entry is in there, it should be first, just in case
+    @classes = ( delete $classes{'MT::Entry'} ? ('MT::Entry') : (), keys %classes);
+
     my $index = $app->param ('index') || 'entry';
     my $class = $indexes{ $index }->{class};
-    eval ("require $class;");
-    if ($@) {
-        return $app->error ("Error loading $class ($index): " . $@);
-    }
     my $search_keyword = $app->{search_string};
     
     my $sort_mode = {};
@@ -224,17 +246,54 @@ sub straight_sphinx_search {
         $sort_mode = { Segments => 'authored_on' };
     }
     
+    my @blog_ids = keys %{ $app->{ searchparam }{ IncludeBlogs } };
+    my $filters = {
+        blog_id => \@blog_ids,
+    };
+    my $range_filters = {};
+    
+    if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
+        require MT::Category;
+        my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_basename });
+        if (@cats) {
+            $filters->{category} = [ map { $_->id } @cats ];
+        }
+    }
+    
+    if ($app->param ('date_start') || $app->param ('date_end')) {
+        my $date_start = $app->param ('date_start');
+        if ($date_start) {
+            $date_start = ts2epoch ($blog_id, $date_start . '0000');
+        }
+        else {
+            $date_start = 0;
+        }
+        
+        my $date_end = $app->param ('date_end');
+        if ($date_end) {
+            $date_end = ts2epoch ($blog_id, $date_end . '0000');
+        }
+        else {
+            # max timestamp value? maybe 0xFFFFFFFF instead?
+            # this is probably large enough
+            $date_end = 2147483647;
+        }
+        
+        $range_filters->{created_on} = [ $date_start, $date_end ];
+    }
+    
     my $offset = $app->param ('offset') || 0;
     my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
     
     my $match_mode = $app->param ('match_mode') || 'all';
     
-    my $results = $class->sphinx_search ($search_keyword, 
-        Filters => { blog_id => [ keys %{ $app->{ searchparam }{ IncludeBlogs } } ] }, 
-        Sort    => $sort_mode, 
-        Offset  => $offset, 
-        Limit   => $limit,
-        Match   => $match_mode,
+    my $results = $plugin->sphinx_search (\@classes, $search_keyword, 
+        Filters         => $filters,
+        RangeFilters    => $range_filters,
+        Sort            => $sort_mode, 
+        Offset          => $offset, 
+        Limit           => $limit,
+        Match           => $match_mode,
     );
     my(%blogs, %hits);
     my $i = 0;
@@ -270,7 +329,7 @@ sub _pid_path {
 sub gen_sphinx_conf {
     my $app = shift;
     
-    my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl');
+    my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl') or die $plugin->errstr;
     my %params;
     
     $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
@@ -286,15 +345,30 @@ sub gen_sphinx_conf {
  
     my %info_query;
     my %query;
+    my %mva;
     foreach my $source (keys %indexes) {
         $query{$source} = "SELECT " . join(", ", map { 
-            $indexes{$source}->{date_columns}->{$_} ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $source . '_' . $_ : $source . '_' . $_
+            $indexes{$source}->{date_columns}->{$_} ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
+            $indexes{$source}->{group_columns}->{$_} ? "${source}_$_ as $_" :
+                                                      $source . '_' . $_
             } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } } ) ) . 
             " FROM mt_$source";
         if (my $sel_values = $indexes{$source}->{select_values}) {
             $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
         }
         $info_query{$source} = "SELECT * from mt_$source where ${source}_" . $indexes{$source}->{ id_column } . ' = $id';
+        
+        if ($indexes{$source}->{mva}) {
+            foreach my $mva (keys %{$indexes{$source}->{mva}}) {
+                my $cur_mva = $indexes{$source}->{mva}->{$mva};
+                my $mva_source = $cur_mva->{with}->datasource;
+                my $mva_query = "SELECT " . join (', ', map { "${mva_source}_$_" } @{$cur_mva->{by}}) . " from mt_" . $mva_source;
+                if (my $sel_values = $cur_mva->{select_values}) {
+                    $mva_query .= " WHERE " . join (" AND ", map { "${mva_source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
+                }
+                push @{$mva{$source}}, { mva_query => $mva_query, mva_name => $mva };
+            }            
+        }
     }
     $params{ source_loop } = [
         map {
@@ -302,18 +376,21 @@ sub gen_sphinx_conf {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],
+                 group_loop    => [ map { { group_column => $_ } } keys %{$indexes{$_}->{group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta  => $indexes{$_}->{delta},
+                 mva_loop   => $mva{$_} || [],
                 } 
         }
         keys %indexes
     ];
     
+    my $str = $app->build_page ($tmpl, \%params);
+    die $app->errstr if (!$str);
     $app->{no_print_body} = 1;
     $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
     $app->send_http_header ('text/plain');
-    $app->print ($app->build_page ($tmpl, \%params));
+    $app->print ($str);
 }
 
 sub start_indexer {
@@ -390,19 +467,20 @@ sub sphinx_init {
         my $excludes = { map { $_ => 1 } @{$params{exclude_columns}} };
         $columns = [ grep { !exists $excludes->{$_} } @$columns ];
     }
+    my $id_column = $params{id_column} || $primary_key;
     $indexes{ $datasource } = {
-        id_column   => $params{id_column} || $primary_key,
+        id_column   => $id_column,
         columns     => $columns,
     };
     $indexes{ $datasource }->{class} = $class;
     $indexes{ $datasource }->{delta} = $params{delta};
     
     if (exists $defs->{ blog_id }) {
-        push @{$indexes{ $datasource }->{ group_columns }}, 'blog_id';
+        $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
     }
     
     if (exists $params{group_columns}) {
-        push @{$indexes{ $datasource }->{ group_columns }}, grep { $_ ne 'blog_id' } @{$params{group_columns}};
+        $indexes{ $datasource }->{ group_columns }->{$_}++ foreach (@{$params{group_columns}});
     }
     
     if ($props->{audit}) {
@@ -417,6 +495,22 @@ sub sphinx_init {
     if (exists $params{select_values}) {
         $indexes{ $datasource }->{select_values} = $params{select_values};
     }    
+    
+    if (exists $params{mva}) {
+        $indexes{ $datasource }->{mva} = $params{mva};
+    }
+    
+    if ($class->isa ('MT::Taggable')) {
+        require MT::Tag;
+        require MT::ObjectTag;
+        # if it's taggable, setup the MVA bits
+        $indexes{ $datasource }->{ mva }->{ tag } = {
+            to      => 'MT::Tag',
+            with    => 'MT::ObjectTag',
+            by      => [ 'object_id', 'tag_id' ],
+            select_values   => { object_datasource => $datasource },
+        };
+    }
     
     $indexes{ $datasource }->{id_to_obj} = $params{id_to_obj} || sub { $class->load ($_[0]) };
 }
@@ -434,24 +528,44 @@ sub _process_extended_sort {
 
 sub sphinx_search {
     my $plugin = shift;
-    my ($class, $search, %params) = @_;
-    
-    my $datasource = $class->datasource;
-    
-    return () if (!exists $indexes{ $datasource });
-    
+    my ($classes, $search, %params) = @_;
+
+    my @classes;
+    if (ref $classes) {
+        @classes = @$classes;
+    }
+    else {
+        @classes = ($classes);
+    }
+
+    # I'm sure there's a better way to do this bit
+    # but it's working for now
+    my $class;
+    my $datasource;
+    for my $c (reverse @classes) {
+        $class = $c;
+        $datasource = $class->datasource;
+        return () if (!exists $indexes{ $datasource });
+    }
+        
     my $spx = _get_sphinx();
     
     if (exists $params{Filters}) {
         foreach my $filter (keys %{ $params{Filters} }) {
-            $spx->SetFilter($datasource . '_' . $filter, $params{Filters}{$filter});
+            $spx->SetFilter($filter, $params{Filters}{$filter});
+        }
+    }
+    
+    if (exists $params{RangeFilters}) {
+        foreach my $filter (keys %{ $params{RangeFilters} }) {
+            $spx->SetFilterRange ($filter, @{$params{RangeFilters}->{$filter}});
         }
     }
     
     if (exists $params{Sort}) {
-        exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $datasource . '_' . $params{Sort}->{Ascend}) :
-        exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $datasource . '_' . $params{Sort}->{Descend}) :
-        exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $datasource . '_' . $params{Sort}->{Segments}) :
+        exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $params{Sort}->{Ascend}) :
+        exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $params{Sort}->{Descend}) :
+        exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $params{Sort}->{Segments}) :
         exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $plugin->_process_extended_sort ($class, $params{Sort}->{Extended})) :
                                                 $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
@@ -484,7 +598,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit);
     
-    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta_index" : '' ));
+    my $results = $spx->Query ($search, join ( ' ', map { my $ds = $_->datasource; $ds . '_index' . ( $indexes{$ds}->{delta} ? " ${ds}_delta_index" : '' ) } @classes ) );
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
@@ -496,7 +610,7 @@ sub sphinx_search {
     }
 
     my @result_objs = ();
-    my $meth = $indexes{ $datasource }->{id_to_obj};
+    my $meth = $indexes{ $datasource }->{id_to_obj} or die "No id_to_obj method for $datasource";
     foreach my $match (@{$results->{ matches }}) {
         my $id = $match->{ doc };
         my $o = $meth->($id) or next;
