@@ -84,6 +84,9 @@ sub init_registry {
                 'SearchFilterValue'     => \&search_filter_value_tag,
 
                 'SearchParameters'      => \&search_parameters_tag,
+
+                'SearchDateStart'       => \&search_date_start_tag,
+                'SearchDateEnd'         => \&search_date_end_tag,
             },
             block   => {
                 'IfCurrentSearchResultsPage?'    => \&if_current_search_results_page_conditional_tag,
@@ -103,6 +106,9 @@ sub init_registry {
 
                 'IfSearchFiltered?'              => \&if_search_filtered_conditional_tag,
                 'IfSearchSortedBy?'              => \&if_search_sorted_by_conditional_tag,
+
+                'IfSearchDateStart?'             => \&if_search_date_start_conditional_tag,
+                'IfSearchDateEnd?'               => \&if_search_date_end_conditional_tag,
             },
         }      
     };
@@ -371,7 +377,9 @@ sub straight_sphinx_search {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
-    my $filter_stash;
+    my $filter_stash = {};
+    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$range_filters->{$_}}) foreach (keys %$range_filters);
+    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$filters->{$_}}) foreach (keys %$filters);
     
     # General catch-all for filters
     my %params = $app->param_hash;
@@ -507,7 +515,7 @@ sub _gen_sphinx_conf_tmpl {
 
         $query{$source} = "SELECT " . join(", ", map { 
             $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as $_" :
+            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as " . $indexes{$source}->{group_columns}->{$_} :
             $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
             $counts{$source}->{$_}                          ? "(" . $counts{$source}->{$_} . ") as $_" :
                                                               $source . '_' . $_
@@ -545,7 +553,7 @@ sub _gen_sphinx_conf_tmpl {
                  source => $_,
                  query  => $query{$_},
                  info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } ( keys %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
+                 group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
                  delta_query  => $delta_query{$_},
@@ -656,11 +664,20 @@ sub sphinx_init {
     $indexes{ $datasource }->{count_columns} = $params{count_columns};
     
     if (exists $defs->{ blog_id }) {
-        $indexes{ $datasource }->{ group_columns }->{ blog_id }++;
+        $indexes{ $datasource }->{ group_columns }->{ blog_id } = 'blog_id';
     }
     
     if (exists $params{group_columns}) {
-        $indexes{ $datasource }->{ $defs->{$_}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$_}++ foreach (@{$params{group_columns}});
+        for my $column (@{$params{group_columns}}) {
+            my $name;
+            if ('HASH' eq ref ($column)) {
+                ($column, $name) = each (%$column);
+            }
+            else {
+                $name = $column;
+            }
+            $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
+        }
     }
     
     if ($props->{audit}) {
@@ -1149,5 +1166,36 @@ sub search_parameters_tag {
     require MT::Util;
     return join ('&', map { $_ . '=' . MT::Util::encode_url ($params{$_}) } grep { !exists $skips{$_} }keys %params);
 }
+
+sub if_search_date_start_conditional_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    return defined $app->param ('date_start');
+}
+
+sub if_search_date_end_conditional_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    return defined $app->param ('date_end');
+}
+
+sub search_date_start_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    local $_[0]->{current_timestamp} = $app->param ('date_start') . '0000';
+    
+    require MT::Template::ContextHandlers;
+    MT::Template::ContextHandlers::_hdlr_date (@_);
+}
+
+sub search_date_end_tag {
+    require MT::App;
+    my $app = MT::App->instance;
+    local $_[0]->{current_timestamp} = $app->param ('date_end') . '0000';
+    
+    require MT::Template::ContextHandlers;
+    MT::Template::ContextHandlers::_hdlr_date (@_);
+}
+
 
 1;
