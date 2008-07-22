@@ -152,6 +152,7 @@ sub init_search_app {
     {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
+        *MT::App::Search::_tag_search      = \&straight_sphinx_search;
         *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
         my $orig_results = \&MT::App::Search::Context::_hdlr_results;
         *MT::App::Search::Context::_hdlr_results = sub {
@@ -254,6 +255,28 @@ sub straight_sphinx_search {
     my $filters = {
         blog_id => \@blog_ids,
     };
+
+    # if it's a tag search,
+    # grab all the tag ids we can find for a filter
+    # and nix the search keyword
+    if ($app->{searchparam}{Type} eq 'tag') {
+        require MT::Tag;
+        my $tags = $app->{search_string};
+        my @tag_names = MT::Tag->split(',', $tags);
+        my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
+        my @tags = MT::Tag->load({ name => [ keys %tags ] });
+        my @tag_ids;
+        foreach (@tags) {
+            push @tag_ids, $_->id;
+            my @more = MT::Tag->load({ n8d_id => $_->n8d_id ? $_->n8d_id : $_->id });
+            push @tag_ids, $_->id foreach @more;
+        }
+        @tag_ids = ( 0 ) unless @tags;
+        
+        $filters->{tag} = \@tag_ids;
+        $search_keyword = undef;
+    }
+
     my $range_filters = {};
     
     if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
@@ -648,7 +671,20 @@ sub search_results_page_loop_container_tag {
     
     my $res = '';
     my $glue = $args->{glue} || '';
-    foreach my $page (1 .. $number_pages) {
+    my $lastn = $args->{lastn};
+    $lastn = 0 if (2 * $lastn + 1 > $number_pages);
+    my $low_end = !$lastn ? 1 : 
+                  $current_page - $lastn > 0 ? $current_page - $lastn : 
+                  1;
+    my $high_end = !$lastn ? $number_pages : 
+                   $current_page + $lastn > $number_pages ? $number_pages : 
+                   $current_page + $lastn;
+    my @pages = ($low_end .. $high_end);
+    while ($lastn && scalar @pages < 2 * $lastn + 1) {
+        unshift @pages, $pages[0] - 1 if ($pages[0] > 1);    
+        push @pages, $pages[$#pages] + 1 if ($pages[$#pages] < $number_pages);
+    }
+    for my $page (@pages) {
         local $ctx->{__stash}{sphinx_page_number} = $page;
         # offset is 0 for page 1, limit for page 2, limit * 2 for page 3, ...
         local $ctx->{__stash}{sphinx_pages_offset} = ($page - 1) * $limit;
@@ -770,7 +806,7 @@ sub previous_search_results_page {
 
 sub search_all_result_tag {
     require MT::App;
-    MT::App->instance->param ('searchall');
+    MT::App->instance->param ('searchall') ? 1 : 0;
 }
 
 1;
