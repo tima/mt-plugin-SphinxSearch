@@ -304,6 +304,7 @@ sub gen_sphinx_conf {
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } @{$indexes{$_}->{group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
+                 delta  => $indexes{$_}->{delta},
                 } 
         }
         keys %indexes
@@ -378,7 +379,6 @@ sub sphinx_init {
     
     my $props = $class->properties;
 
-
     my $primary_key = $props->{primary_key};
     my $defs = $class->column_defs;
     my $columns = [ grep { $_ ne $primary_key } keys %$defs ];
@@ -395,6 +395,7 @@ sub sphinx_init {
         columns     => $columns,
     };
     $indexes{ $datasource }->{class} = $class;
+    $indexes{ $datasource }->{delta} = $params{delta};
     
     if (exists $defs->{ blog_id }) {
         push @{$indexes{ $datasource }->{ group_columns }}, 'blog_id';
@@ -483,7 +484,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit);
     
-    my $results = $spx->Query ($search, $datasource . '_index');
+    my $results = $spx->Query ($search, $datasource . '_index' . ( $indexes{$datasource}->{delta} ? " ${datasource}_delta_index" : '' ));
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
