@@ -248,20 +248,9 @@ sub _get_sphinx {
     return $spx;
 }
 
-sub result_count_tag {
-    my ($ctx, $args) = @_;
-    require MT::Request;
-    my $r = MT::Request->instance;
-    return $r->stash ('sphinx_results_total') || 0;
-}
-
-
-sub straight_sphinx_search {
+sub _get_sphinx_results {
     my $app = shift;
-
-    # Skip out unless either there *is* a search term, or we're explicitly searching all
-    return 1 unless ($app->{search_string} =~ /\S/ || $app->param ('searchall'));
-
+    my ($res_callback) = @_;
     require MT::Log;
     my $blog_id;
     if ($app->{searchparam}{IncludeBlogs} && scalar (keys %{ $app->{searchparam}{IncludeBlogs} }) == 1) {
@@ -452,7 +441,6 @@ sub straight_sphinx_search {
         Match           => $match_mode,
         Max             => $max,
     );
-    my(%blogs, %hits);
     my $i = 0;
     if (my $stash = $indexes{$indexes[0]}->{stash}) {
         require MT::Request;
@@ -460,11 +448,9 @@ sub straight_sphinx_search {
         $r->stash ('sphinx_stash_name', $stash);
         $r->stash ('sphinx_results', $results->{result_objs});        
     }
-    else {
+    elsif ($res_callback) {
         foreach my $o (@{$results->{result_objs}}) {
-            my $blog_id = $o->blog_id;
-            $o->{__sphinx_search_index} = $i++;
-            $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++);
+            $res_callback->($o, $i++);
         }        
     }
     
@@ -482,6 +468,31 @@ sub straight_sphinx_search {
     $r->stash ('sphinx_pages_limit', $limit);
     $r->stash ('sphinx_filters', $filter_stash);
     $r->stash ('sphinx_sort_by', $sort_by_param);
+    
+    $results;
+}
+
+
+sub result_count_tag {
+    my ($ctx, $args) = @_;
+    require MT::Request;
+    my $r = MT::Request->instance;
+    return $r->stash ('sphinx_results_total') || 0;
+}
+
+sub straight_sphinx_search {
+    my $app = shift;
+
+    # Skip out unless either there *is* a search term, or we're explicitly searching all
+    return 1 unless ($app->{search_string} =~ /\S/ || $app->param ('searchall'));
+
+    my (%hits);
+    my $results = _get_sphinx_results ($app, sub {
+        my ($o, $i) = @_;
+        my $blog_id = $o->blog_id;
+        $o->{__sphinx_search_index} = $i;
+        $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++); 
+    });
     1;
 }
 
