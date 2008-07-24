@@ -177,7 +177,7 @@ sub init_search_app {
     my $plugin = shift;
     my ($app) = @_;
         
-    {
+    if ($app->id eq 'search') {
         local $SIG{__WARN__} = sub { };
         *MT::App::Search::_straight_search = \&straight_sphinx_search;
         *MT::App::Search::_tag_search      = \&straight_sphinx_search;
@@ -200,6 +200,14 @@ sub init_search_app {
             my $res = $orig_init->(@_);
             _sphinx_search_context_init (@_);
             return $res;
+        }
+    }
+    elsif ($app->id eq 'new_search') {
+        local $SIG{__WARN__} = sub { };
+        *MT::App::Search::execute = sub {
+            my $results = _get_sphinx_results ($_[0]);
+            my @results = (@{$results->{result_objs}});
+            return (scalar @results, sub { shift @results });
         }
     }
 
