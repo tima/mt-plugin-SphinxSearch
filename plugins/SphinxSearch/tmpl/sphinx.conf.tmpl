@@ -46,6 +46,7 @@ index <TMPL_VAR NAME=SOURCE>_index
 <TMPL_IF NAME=DELTA_QUERY>
 source <TMPL_VAR NAME=SOURCE>_delta_source : <TMPL_VAR NAME=SOURCE>_source
 {
+<TMPL_IF NAME=DELTA_PRE_QUERY>    sql_query_pre = <TMPL_VAR NAME=DELTA_PRE_QUERY></TMPL_IF>
     sql_query       = <TMPL_VAR NAME=DELTA_QUERY>
 }
 

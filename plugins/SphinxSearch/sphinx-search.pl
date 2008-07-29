@@ -517,6 +517,7 @@ sub _gen_sphinx_conf_tmpl {
  
     my %info_query;
     my %delta_query;
+    my %delta_pre_query;
     my %query;
     my %mva;
     my %counts;
@@ -573,7 +574,8 @@ sub _gen_sphinx_conf_tmpl {
             $delta_query{$source} = $query{$source};
             $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
             if (exists $indexes{$source}->{date_columns}->{$delta}) {
-                $delta_query{$source} .= "DATE_ADD(${source}_${delta}, INTERVAL 36 HOUR) > NOW()";
+                $delta_pre_query{$source} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
+                $delta_query{$source} .= "${source}_${delta} > \@cutoff";
             }
         }
     }
@@ -586,6 +588,7 @@ sub _gen_sphinx_conf_tmpl {
                  group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
+                 delta_pre_query => $delta_pre_query{$_},
                  delta_query  => $delta_query{$_},
                  mva_loop   => $mva{$_} || [],
                 } 
