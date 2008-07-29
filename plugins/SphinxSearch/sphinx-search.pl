@@ -404,7 +404,7 @@ sub _get_sphinx_results {
             my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
             eval ("require $class;");
             next if ($@);
-            my @v = $class->load ({ $lookup => $app->param ("filter_$filter") });
+            my @v = $class->load ({ $lookup => $app->param ("filter_$filter"), blog_id => \@blog_ids });
             next unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
             
@@ -532,6 +532,7 @@ sub _gen_sphinx_conf_tmpl {
  
     my %info_query;
     my %delta_query;
+    my %delta_pre_query;
     my %query;
     my %mva;
     my %counts;
@@ -588,7 +589,8 @@ sub _gen_sphinx_conf_tmpl {
             $delta_query{$source} = $query{$source};
             $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
             if (exists $indexes{$source}->{date_columns}->{$delta}) {
-                $delta_query{$source} .= "DATE_ADD(${source}_${delta}, INTERVAL 36 HOUR) > NOW()";
+                $delta_pre_query{$source} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
+                $delta_query{$source} .= "${source}_${delta} > \@cutoff";
             }
         }
     }
@@ -601,6 +603,7 @@ sub _gen_sphinx_conf_tmpl {
                  group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
                  string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
                  date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
+                 delta_pre_query => $delta_pre_query{$_},
                  delta_query  => $delta_query{$_},
                  mva_loop   => $mva{$_} || [],
                 } 
@@ -712,8 +715,13 @@ sub sphinx_init {
         $indexes{ $datasource }->{ group_columns }->{ blog_id } = 'blog_id';
     }
     
+    if (exists $props->{indexes}) {
+        push @{$params{group_columns}}, keys %{$props->{indexes}};
+    }
+    
     if (exists $params{group_columns}) {
         for my $column (@{$params{group_columns}}) {
+            next if ($column eq $id_column); # skip if this is the id column, don't need to group on it after all
             my $name;
             if ('HASH' eq ref ($column)) {
                 ($column, $name) = each (%$column);
@@ -721,13 +729,22 @@ sub sphinx_init {
             else {
                 $name = $column;
             }
-            $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
+            my $col_type = $defs->{$column}->{type};
+            if ($col_type =~ /^(datetime|timestamp)/) {
+                # snuck in from indexes, we should push it into the date columns instead
+                push @{$params{date_columns}}, $column;
+            }
+            else {                
+                $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
+            }
         }
     }
     
     if ($props->{audit}) {
         $indexes{$datasource}->{date_columns}->{'created_on'}++;
         $indexes{$datasource}->{date_columns}->{'modified_on'}++;
+        
+        $indexes{$datasource}->{delta} = 'modified_on' if (!$indexes{$datasource}->{delta});
     }
     
     if (exists $params{date_columns}) {
@@ -795,6 +812,13 @@ sub sphinx_search {
     if (exists $params{Filters}) {
         foreach my $filter (keys %{ $params{Filters} }) {
             $spx->SetFilter($filter, $params{Filters}{$filter});
+        }
+    }
+    
+    if (exists $params{SFilters}) {
+        require String::CRC32;
+        foreach my $filter (keys %{ $params{SFilters} }) {
+            $spx->SetFilter ($filter . '_crc32', [ map { String::CRC32::crc32 ($_) } @{$params{SFilters}{$filter}} ] );
         }
     }
     
