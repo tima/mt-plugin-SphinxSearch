@@ -610,7 +610,7 @@ sub _gen_sphinx_conf_tmpl {
         }
         keys %indexes
     ];
-    $tmpl->param (%params);
+    $tmpl->param (\%params);
     $tmpl;
 }
 
