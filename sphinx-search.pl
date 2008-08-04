@@ -695,6 +695,7 @@ sub sphinx_init {
     my $primary_key = $props->{primary_key};
     my $defs = $class->column_defs;
     my $columns = [ grep { $_ ne $primary_key } keys %$defs ];
+    my $columns_hash = { map { $_ => 1 } @$columns };
     if ($params{include_columns}) {
         my $includes = { map { $_ => 1} @{$params{include_columns}} };
         $columns = [ grep {exists $includes->{$_}} @$columns ];
@@ -718,7 +719,8 @@ sub sphinx_init {
     }
     
     if (exists $props->{indexes}) {
-        push @{$params{group_columns}}, keys %{$props->{indexes}};
+        # push all the indexes that are actual columns
+        push @{$params{group_columns}}, grep { $columns_hash->{$_} } keys %{$props->{indexes}};
     }
     
     if (exists $params{group_columns}) {
@@ -734,7 +736,7 @@ sub sphinx_init {
             my $col_type = $defs->{$column}->{type};
             if ($col_type =~ /^(datetime|timestamp)/) {
                 # snuck in from indexes, we should push it into the date columns instead
-                push @{$params{date_columns}}, $column;
+                $params{date_columns}->{$column} = 1;
             }
             else {                
                 $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
