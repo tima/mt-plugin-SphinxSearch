@@ -214,6 +214,12 @@ sub init_search_app {
             return ( '' ) if ($_[0]->param ('searchall'));
             return $orig_search_terms->(@_);
         };
+        my $orig_prep_context = \&MT::App::Search::prepare_context;
+        *MT::App::Search::prepare_context = sub {
+            my $ctx = $orig_prep_context->(@_);
+            _sphinx_search_context_init ($ctx);
+            return $ctx;
+        }
     }
 
 }
