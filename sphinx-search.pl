@@ -207,8 +207,13 @@ sub init_search_app {
         *MT::App::Search::execute = sub {
             my $results = _get_sphinx_results ($_[0]);
             my @results = (@{$results->{result_objs}});
-            return (scalar @results, sub { shift @results });
-        }
+            return ($results->{query_results}->{total}, sub { shift @results });
+        };
+        my $orig_search_terms = \&MT::App::Search::search_terms;
+        *MT::App::Search::search_terms = sub {
+            return ( '' ) if ($_[0]->param ('searchall'));
+            return $orig_search_terms->(@_);
+        };
     }
 
 }
