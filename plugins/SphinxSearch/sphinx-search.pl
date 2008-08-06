@@ -14,7 +14,7 @@ use POSIX;
 use MT::Util qw( ts2epoch );
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.99.46.2mt4';
+$VERSION = '0.99.47mt4';
 $plugin = MT::Plugin::SphinxSearch->new ({
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
