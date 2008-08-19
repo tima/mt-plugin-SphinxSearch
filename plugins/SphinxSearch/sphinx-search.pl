@@ -33,6 +33,9 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'searchd_pid_path', { Default => '/var/log/searchd.pid', Scope => 'system' } ],
             [ 'search_excerpt_words', { Default => 9, Scope => 'system' } ],
             [ 'index_morphology', { Default => 'none', Scope => 'system' } ],
+            [ 'db_host', { Default => undef, Scope => 'system' } ],
+            [ 'db_user', { Default => undef, Scope => 'system' } ],
+            [ 'db_pass', { Default => undef, Scope => 'system' } ],
             ]),
         
         tasks   => {
@@ -524,9 +527,9 @@ sub _gen_sphinx_conf_tmpl {
     my $app = MT->instance;
     $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
     
-    $params{ db_host } = $app->{cfg}->DBHost;
-    $params{ db_user } = $app->{cfg}->DBUser;
-    my $db_pass        = $app->{cfg}->DBPassword;
+    $params{ db_host } = $plugin->get_config_value ('db_host', 'system') || $app->{cfg}->DBHost;
+    $params{ db_user } = $plugin->get_config_value ('db_user', 'system') || $app->{cfg}->DBUser;
+    my $db_pass        = $plugin->get_config_value ('db_pass', 'system') || $app->{cfg}->DBPassword;
     $db_pass =~ s/#/\\#/g;
     $params{ db_pass } = $db_pass;
     $params{  db_db  } = $app->{cfg}->Database;
@@ -683,7 +686,7 @@ sub start_indexer {
     
     my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
     my $indexer_binary = File::Spec->catfile ($sphinx_path, 'indexer');
-    my $cmd = "$indexer_binary --quiet --config $sphinx_path --rotate " . join (' ', @indexes);
+    my $cmd = "$indexer_binary --quiet --config $sphinx_conf --rotate " . join (' ', @indexes);
     $plugin->run_cmd ($cmd);    
 }
 
