@@ -36,9 +36,14 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             ]),
         
         tasks   => {
+            'sphinx_delta_indexer'  => {
+                name    => 'Sphinx Delta Indexer',
+                frequency   => 2 * 60, # every two minutes
+                code    => sub { $plugin->delta_indexer_task (@_) },
+            },
             'sphinx_indexer'    => {
                 name    => 'Sphinx Indexer',
-                frequency   => 15 * 60,
+                frequency   => 24 * 60 * 60, # every 24 hours
                 code        => sub { $plugin->sphinx_indexer_task (@_) },
             }
         },
@@ -136,20 +141,41 @@ sub sphinx_indexes {
     return %indexes;
 }
 
+sub _check_searchd {
+    my $plugin = shift;
+    
+    if (!$plugin->check_searchd) {
+        if (!$plugin->start_searchd) {
+            MT->instance->log ("Error starting searchd: " . $plugin->errstr);
+            die ("Error starting searchd: " . $plugin->errstr);
+        }
+    }
+}
+
+
+sub delta_indexer_task {
+    my $plugin = shift;
+    my $task = shift;
+    
+    $plugin->_check_searchd;
+    
+    if (!$plugin->start_indexer ('delta')) {
+        MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
+        die ("Error starting sphinx indexer: " . $plugin->errstr);
+    }
+
+    1;
+}
+
 sub sphinx_indexer_task {
     my $plugin = shift;
     my $task = shift;
     
-    if (!$plugin->check_searchd) {
-        if (my $err = $plugin->start_searchd) {
-            MT->instance->log ("Error starting searchd: $err");
-            die ("Error starting searchd: $err");
-        }
-    }
+    $plugin->_check_searchd;
     
-    if (my $err = $plugin->start_indexer) {
-        MT->instance->log ("Error starting sphinx indexer: $err");
-        die ("Error starting sphinx indexer: $err");
+    if (!$plugin->start_indexer ('main')) {
+        MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
+        die ("Error starting sphinx indexer: " . $plugin->errstr);
     }
     
     1;
@@ -239,6 +265,7 @@ sub _sphinx_search_context_init {
 }
 
 sub _get_sphinx {
+    require Sphinx;
     my $spx = Sphinx->new;
     $spx->SetServer($plugin->get_config_value ('searchd_host', 'system'), $plugin->get_config_value ('searchd_port', 'system'));
 
@@ -619,17 +646,59 @@ sub gen_sphinx_conf {
     $app->print ($str);
 }
 
+sub run_cmd {
+    my $plugin = shift;
+    my ($cmd) = @_;
+    my $res = `$cmd`;
+    my $return_code = $? / 256;
+    $return_code ? $plugin->error ($res) : 1;
+}
+
+sub which_indexes {
+    my $plugin = shift;
+    my %params = @_;
+    my @indexes;
+    if (my $indexer = $params{Indexer}) {
+        if ($indexer eq 'all') {
+            push @indexes, map { $indexes{$_}->{delta} ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } keys %indexes;
+        }
+        elsif ($indexer eq 'main') {
+            push @indexes, map { $_ . '_index' } keys %indexes;
+        }
+        elsif ($indexer eq 'delta') {
+            push @indexes, map { $_ . '_delta_index' } grep { $indexes{$_}->{delta} } keys %indexes;
+        }        
+    }
+    elsif (my $sources = $params{Source}) {
+        my @sources;
+        if (ref ($sources)) {
+            @sources = @$sources;
+        }
+        else {
+            @sources = ($sources);
+        }
+        @sources = map { my $s = $_; if ($s =~ /::/) { $s = $s->datasource } $s; } @sources;
+        push @indexes, map { $indexes{$_}->{delta} ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } @sources;
+    }
+    
+    return @indexes;
+}
+
+
 sub start_indexer {
     my $plugin = shift;
+    my ($indexes) = @_;
+    $indexes = 'main' if (!$indexes);
     my $sphinx_path = $plugin->get_config_value ('sphinx_path', 'system') or return "Sphinx path is not set";
 
+    my @indexes = $plugin->which_indexes (Indexer => $indexes);
+
+    return $plugin->error ("No indexes to rebuild") if (!@indexes);
+    
     my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
     my $indexer_binary = File::Spec->catfile ($sphinx_path, 'indexer');
-    my $str = `$indexer_binary --quiet --config $sphinx_conf --all --rotate`;
-    
-    my $return_code = $? / 256;
-    return $str if ($return_code);
-    return undef;
+    my $cmd = "$indexer_binary --quiet --config $sphinx_path --rotate " . join (' ', @indexes);
+    $plugin->run_cmd ($cmd);    
 }
 
 sub check_searchd {
@@ -665,11 +734,7 @@ sub start_searchd {
     
     my $searchd_path = File::Spec->catfile ($bin_path, 'searchd');
     
-    my $out = `$searchd_path --config $conf_path`;
-    my $return_code = $? / 256;
-    
-    return $out if ($return_code);
-    return undef;
+    $plugin->run_cmd ("$searchd_path --config $conf_path");
 }
 
 sub sphinx_init {
@@ -800,7 +865,7 @@ sub sphinx_search {
         $datasource = $class->datasource;
         return () if (!exists $indexes{ $datasource });
     }
-        
+
     my $spx = _get_sphinx();
     
     if (exists $params{Filters}) {
@@ -863,7 +928,7 @@ sub sphinx_search {
     
     $spx->SetLimits ($offset, $limit, $max);
     
-    my $results = $spx->Query ($search, join ( ' ', map { my $ds = $_->datasource; $ds . '_index' . ( $indexes{$ds}->{delta} ? " ${ds}_delta_index" : '' ) } @classes ) );
+    my $results = $spx->Query ($search, join ( ' ', $plugin->which_indexes (Source => [ @classes ] ) ) );
     if (!$results) {
         MT->instance->log ({
             message => "Error querying searchd daemon: " . $spx->GetLastError,
