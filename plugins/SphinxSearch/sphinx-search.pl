@@ -39,12 +39,12 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             'sphinx_delta_indexer'  => {
                 name    => 'Sphinx Delta Indexer',
                 frequency   => 2 * 60, # every two minutes
-                code    => sub { $plugin->delta_indexer_task (@_) },
+                code    => sub { $plugin->sphinx_indexer_task ('delta', @_) },
             },
             'sphinx_indexer'    => {
                 name    => 'Sphinx Indexer',
                 frequency   => 24 * 60 * 60, # every 24 hours
-                code        => sub { $plugin->sphinx_indexer_task (@_) },
+                code        => sub { $plugin->sphinx_indexer_task ('main', @_) },
             }
         },
         
@@ -152,28 +152,14 @@ sub _check_searchd {
     }
 }
 
-
-sub delta_indexer_task {
-    my $plugin = shift;
-    my $task = shift;
-    
-    $plugin->_check_searchd;
-    
-    if (!$plugin->start_indexer ('delta')) {
-        MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
-        die ("Error starting sphinx indexer: " . $plugin->errstr);
-    }
-
-    1;
-}
-
 sub sphinx_indexer_task {
     my $plugin = shift;
+    my $which = shift;
     my $task = shift;
     
     $plugin->_check_searchd;
     
-    if (!$plugin->start_indexer ('main')) {
+    if (!$plugin->start_indexer ($which)) {
         MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
         die ("Error starting sphinx indexer: " . $plugin->errstr);
     }
