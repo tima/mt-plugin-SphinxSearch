@@ -18,8 +18,8 @@ use warnings;
 my $fail = 1;
 my @args;
 
-use MT;
-my $mt = MT->instance or die MT->errstr;
+use MT::App;
+my $mt = MT::App->instance or die MT::App->errstr;
 
 
 {

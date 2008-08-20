@@ -9,15 +9,14 @@ use Test::More tests => 9;
 # Load MT, but it needs to be an MT::App to actually load tmpls :-/
 use MT;
 use MT::App;
-my $mt = MT::App->instance or die MT->errstr;
+my $mt = MT::App->instance or die MT::App->errstr;
 
 my $plugin = MT::Plugin::SphinxSearch->instance;
 ok ($plugin, "Plugin loaded successfully");
 
 # fake the plugin config data
-require MT::PluginData;
-my $pd = MT::PluginData->new;
-$plugin->{__config_obj}{system} = $pd;
+
+my $pd = $plugin->get_config_obj ('system');
 
 my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
 ok ($tmpl, "Template successfully generated");
