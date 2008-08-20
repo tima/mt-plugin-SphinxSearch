@@ -51,4 +51,20 @@
     <div class="field"><input type="text" name="searchd_port" id="searchd_port" value="<TMPL_VAR NAME=SEARCHD_PORT>" /></div>
 </div>
 
+<div class="setting grouped">
+    <div class="label"><label for="db_host">Alternate DB Host:</label></div>
+    <div class="field"><input type="text" name="db_host" id="db_host" value="<TMPL_VAR NAME=DB_HOST>" /></div>
+</div>
+
+<div class="setting grouped">
+    <div class="label"><label for="db_user">Alternate DB Username:</label></div>
+    <div class="field"><input type="text" name="db_user" id="db_user" value="<TMPL_VAR NAME=DB_USER>" /></div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="db_pass">Alternate DB Password:</label></div>
+    <div class="field"><input type="text" name="db_pass" id="db_pass" value="<TMPL_VAR NAME=DB_PASS>" /></div>
+</div>
+
+
 <p><a href="<TMPL_VAR NAME=SCRIPT_URI>?__mode=gen_sphinx_conf">Generate sphinx.conf file from MT settings</a></p>
