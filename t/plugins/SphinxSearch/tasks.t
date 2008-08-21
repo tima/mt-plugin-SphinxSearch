@@ -18,8 +18,8 @@ use warnings;
 my $fail = 1;
 my @args;
 
-use MT;
-my $mt = MT->instance or die MT->errstr;
+use MT::App;
+my $mt = MT::App->instance or die MT::App->errstr;
 
 
 {
@@ -71,6 +71,12 @@ throws_ok { $plugin->sphinx_indexer_task ('delta') } qr/Error starting [^:]*: Te
 $fail = 1;
 lives_ok { $plugin->sphinx_indexer_task ('delta') } 'delta_indexer_task should live if launching succeeds';
 
-
 @indexes = grep { /_index/ } split (/\s+/, join (' ' , @args));
 cmp_bag (\@indexes, [qw( entry_delta_index comment_delta_index )], "Entry and comment delta indexes not present");
+
+my $pd = $plugin->get_config_obj ('system');
+$pd->data ({ sphinx_path => '' });
+ok (!$plugin->start_indexer, "start_indexer should fail if sphinx_path isn't set");
+
+$pd->data ({ sphinx_path => '/usr/bin', sphinx_conf_path => '' });
+ok (!$plugin->start_indexer, "start_indexer should fail if sphinx_conf_path isn't set");

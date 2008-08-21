@@ -15,8 +15,8 @@ use warnings;
 # 
 # require 'plugins/SphinxSearch/sphinx-search.pl';
 # 
-use MT;
-my $mt = MT->instance or die MT->errstr;
+use MT::App;
+my $mt = MT::App->instance or die MT::App->errstr;
 
 my $plugin = MT::Plugin::SphinxSearch->instance;
 ok ($plugin, "Unable to load the plugin instance");

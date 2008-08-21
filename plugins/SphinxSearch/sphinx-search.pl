@@ -122,7 +122,7 @@ MT->add_plugin ($plugin);
 require MT::Entry;
 require MT::Comment;
 MT::Entry->sphinx_init (
-    select_values => { status => MT::Entry::RELEASE },
+    select_values => { status => MT::Entry::RELEASE() },
     group_columns   => [ 'author_id' ],
     mva => {
         category    => {
@@ -678,13 +678,13 @@ sub start_indexer {
     my $plugin = shift;
     my ($indexes) = @_;
     $indexes = 'main' if (!$indexes);
-    my $sphinx_path = $plugin->get_config_value ('sphinx_path', 'system') or return "Sphinx path is not set";
+    my $sphinx_path = $plugin->get_config_value ('sphinx_path', 'system') or return $plugin->error ("Sphinx path is not set");
 
     my @indexes = $plugin->which_indexes (Indexer => $indexes);
 
     return $plugin->error ("No indexes to rebuild") if (!@indexes);
     
-    my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path', 'system') or return "Sphinx conf path is not set";
+    my $sphinx_conf = $plugin->get_config_value ('sphinx_conf_path', 'system') or return $plugin->error ("Sphinx conf path is not set");
     my $indexer_binary = File::Spec->catfile ($sphinx_path, 'indexer');
     my $cmd = "$indexer_binary --quiet --config $sphinx_conf --rotate " . join (' ', @indexes);
     $plugin->run_cmd ($cmd);    
