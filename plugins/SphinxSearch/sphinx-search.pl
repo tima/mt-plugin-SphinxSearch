@@ -144,15 +144,17 @@ sub sphinx_indexes {
     return %indexes;
 }
 
-sub _check_searchd {
+sub check_searchd {
     my $plugin = shift;
     
-    if (!$plugin->check_searchd) {
+    if (!$plugin->_check_searchd) {
         if (!$plugin->start_searchd) {
             MT->instance->log ("Error starting searchd: " . $plugin->errstr);
-            die ("Error starting searchd: " . $plugin->errstr);
+            return $plugin->error ("Error starting searchd: " . $plugin->errstr);
         }
     }
+    
+    1;
 }
 
 sub sphinx_indexer_task {
@@ -160,7 +162,7 @@ sub sphinx_indexer_task {
     my $which = shift;
     my $task = shift;
     
-    $plugin->_check_searchd;
+    die ( $plugin->errstr ) unless $plugin->check_searchd;
     
     if (!$plugin->start_indexer ($which)) {
         MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
@@ -690,7 +692,7 @@ sub start_indexer {
     $plugin->run_cmd ($cmd);    
 }
 
-sub check_searchd {
+sub _check_searchd {
     my $plugin = shift;
     my $pid_path = $plugin->_pid_path;
     
