@@ -16,6 +16,7 @@ use MT::Util qw( ts2epoch );
 use vars qw( $VERSION $plugin );
 $VERSION = '0.99.48mt4';
 $plugin = MT::Plugin::SphinxSearch->new ({
+        id      => 'SphinxSearch',
         name    => 'SphinxSearch',
         description => 'A search script using the sphinx search engine for MySQL',
         version     => $VERSION,
@@ -118,7 +119,13 @@ sub init_registry {
                 'IfSearchDateStart?'             => \&if_search_date_start_conditional_tag,
                 'IfSearchDateEnd?'               => \&if_search_date_end_conditional_tag,
             },
-        }      
+        },
+        task_workers             => {
+            'sphinx_indexer' => {
+                label => "Runs the sphinx indexer.",
+                class => 'SphinxSearch::Worker::Indexer',
+            },
+        },  
     };
     $plugin->registry ($reg);
 }
@@ -147,12 +154,14 @@ sub sphinx_indexer_task {
     my $which = shift;
     my $task = shift;
     
-    die ( $plugin->errstr ) unless $plugin->check_searchd;
+    require MT::TheSchwartz;
+    require TheSchwartz::Job;
     
-    if (!$plugin->start_indexer ($which)) {
-        MT->instance->log ("Error starting sphinx indexer: " . $plugin->errstr);
-        die ("Error starting sphinx indexer: " . $plugin->errstr);
-    }
+    my $job = TheSchwartz::Job->new;
+    $job->funcname ('SphinxSearch::Worker::Indexer');
+    $job->uniqkey ($which);
+    $job->priority (10); # reindexing is high priority, it should be delayed as little as possible
+    MT::TheSchwartz->insert ($job);
     
     1;
 }
