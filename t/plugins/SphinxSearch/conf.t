@@ -14,9 +14,9 @@ my $mt = MT::App->instance or die MT::App->errstr;
 my $plugin = MT::Plugin::SphinxSearch->instance;
 ok ($plugin, "Plugin loaded successfully");
 
-# fake the plugin config data
-
+# grab the plugin config and blank it out
 my $pd = $plugin->get_config_obj ('system');
+$pd->data ({});
 
 my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
 ok ($tmpl, "Template successfully generated");
