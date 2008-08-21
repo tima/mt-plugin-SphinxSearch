@@ -11,6 +11,8 @@ use Sphinx;
 use File::Spec;
 use POSIX;
 
+use List::Util qw( max );
+
 use MT::Util qw( ts2epoch );
 
 use vars qw( $VERSION $plugin );
@@ -539,6 +541,14 @@ sub _gen_sphinx_conf_tmpl {
     $params{ file_path } = $plugin->get_config_value ('sphinx_file_path', 'system') || $app->{cfg}->TempDir;
     $params{ pid_path } = $plugin->_pid_path;
     $params{ morphology } = $plugin->get_config_value ('index_morphology', 'system') || 'none';
+ 
+    require MT::Entry;
+    my @num_entries = ();
+    my $iter = MT::Entry->count_group_by ({ status => MT::Entry::RELEASE() }, { group => [ 'blog_id' ] });
+    my $entry_count;
+    push @num_entries, $entry_count while (($entry_count) = $iter->());
+    my $max_entries = int (1.5 * max @num_entries);
+    $params{ max_matches } = $max_entries > 1000 ? $max_entries : 1000;
  
     my %info_query;
     my %delta_query;
