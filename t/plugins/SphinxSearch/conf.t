@@ -4,7 +4,7 @@ BEGIN {
     unshift @INC, File::Spec->catdir ($mt_home, 'lib'), File::Spec->catdir ($mt_home, 'extlib');
 }
 
-use Test::More tests => 9;
+use Test::More tests => 11;
 
 # Load MT, but it needs to be an MT::App to actually load tmpls :-/
 use MT;
@@ -41,3 +41,21 @@ like ($plugin->_gen_sphinx_conf_tmpl->output, qr/sql_pass\s*=\s*testing_db_pass_
 
 $pd->data ({ db_pass => 'testing_with_#_value' });
 like ($plugin->_gen_sphinx_conf_tmpl->output, qr/sql_pass\s*=\s*testing_with_\\#_value/, "Alternate database password with # value successfully set");
+
+my @data = ([ 5, 1 ]);
+{
+    local $SIG{__WARN__} = sub {};
+    require MT::Entry;
+    *MT::Entry::count_group_by = sub {
+        return sub {
+            my $d = shift @data;
+            return if (!$d);
+            @$d;
+        };
+    };
+}
+like ($plugin->_gen_sphinx_conf_tmpl->output, qr/max_matches\s*=\s*1000/, "Default max_matches value");
+
+@data = ([ 1500, 1 ]);
+my $value = int (1.5 * 1500);
+like ($plugin->_gen_sphinx_conf_tmpl->output, qr/max_matches\s*=\s*$value/, "1.5 times max # entries max_matches value");
