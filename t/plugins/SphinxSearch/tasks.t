@@ -4,7 +4,7 @@ BEGIN {
     unshift @INC, File::Spec->catdir ($mt_home, 'lib'), File::Spec->catdir ($mt_home, 'extlib');
 }
 
-use Test::More tests => 13;
+use Test::More tests => 15;
 use Test::Exception;
 use Test::Deep;
 
