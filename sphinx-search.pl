@@ -478,7 +478,7 @@ sub _get_sphinx_results {
         $filter_stash->{"sphinx_filter_$filter"} = $app->param ("sfilter_$filter");
     }
     
-    my $limit  = $app->param ('limit') || $app->{searchparam}{MaxResults};
+    my $limit  = $app->param ('limit') || $app->{searchparam}{SearchMaxResults};
     my $offset = $app->param ('offset') || 0;
     $offset = $limit * ($app->param ('page') - 1) if (!$offset && $limit && $app->param ('page'));
     my $max    = MT::Entry->count ({ status => MT::Entry::RELEASE(), blog_id => \@blog_ids });
