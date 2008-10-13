@@ -39,6 +39,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'db_host', { Default => undef, Scope => 'system' } ],
             [ 'db_user', { Default => undef, Scope => 'system' } ],
             [ 'db_pass', { Default => undef, Scope => 'system' } ],
+            [ 'use_indexer_tasks', { Default => 1, Scope => 'system' } ],
             ]),
                 
         init_app    => \&init_apps,        
@@ -155,6 +156,8 @@ sub sphinx_indexer_task {
     my $plugin = shift;
     my $which = shift;
     my $task = shift;
+    
+    return unless $plugin->get_config_value ('use_indexer_tasks', 'system');
     
     require MT::TheSchwartz;
     require TheSchwartz::Job;

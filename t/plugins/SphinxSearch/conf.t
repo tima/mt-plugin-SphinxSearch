@@ -4,8 +4,10 @@ BEGIN {
     unshift @INC, File::Spec->catdir ($mt_home, 'lib'), File::Spec->catdir ($mt_home, 'extlib');
 }
 
-use Test::More tests => 11;
+use lib 't/lib', 'lib', 'extlib';
+use Test::More tests => 14;
 
+use MT::Test qw( :db :data );
 # Load MT, but it needs to be an MT::App to actually load tmpls :-/
 use MT;
 use MT::App;
@@ -59,3 +61,17 @@ like ($plugin->_gen_sphinx_conf_tmpl->output, qr/max_matches\s*=\s*1000/, "Defau
 @data = ([ 1500, 1 ]);
 my $value = int (1.5 * 1500);
 like ($plugin->_gen_sphinx_conf_tmpl->output, qr/max_matches\s*=\s*$value/, "1.5 times max # entries max_matches value");
+
+$pd->data ({ use_indexer_tasks => 0 });
+require MT::TheSchwartz::Job;
+is (MT::TheSchwartz::Job->count, 0, "No jobs in the queue");
+
+$plugin->sphinx_indexer_task ('main');
+
+is (MT::TheSchwartz::Job->count, 0, "No jobs were added");
+
+$pd->data ({ use_indexer_tasks => 1 });
+
+$plugin->sphinx_indexer_task ('main');
+
+is (MT::TheSchwartz::Job->count, 1, "One job was added");
