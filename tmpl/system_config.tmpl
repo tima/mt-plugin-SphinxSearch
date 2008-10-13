@@ -66,5 +66,12 @@
     <div class="field"><input type="text" name="db_pass" id="db_pass" value="<TMPL_VAR NAME=DB_PASS>" /></div>
 </div>
 
+<mtapp:setting
+    id="use_indexer_tasks"
+    label="Use Indexer Tasks"
+    hint="Automatically re-index and re-start searchd with <code>run-periodic-tasks</code>"
+    show_hint="1">
+    <input type='checkbox' class='cb' name='use_indexer_tasks' id='use_indexer_tasks'<mt:if name='use_indexer_tasks'> checked="checked"</mt:if> />
+</mtapp:setting>
 
 <p><a href="<TMPL_VAR NAME=SCRIPT_URI>?__mode=gen_sphinx_conf">Generate sphinx.conf file from MT settings</a></p>
