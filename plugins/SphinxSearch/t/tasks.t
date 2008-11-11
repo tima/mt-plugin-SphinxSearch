@@ -1,9 +1,5 @@
-use File::Spec;
-BEGIN {
-    my $mt_home = $ENV{MT_HOME} || '';
-    unshift @INC, File::Spec->catdir ($mt_home, 'lib'), File::Spec->catdir ($mt_home, 'extlib');
-}
 
+use lib 't/lib', 'lib', 'extlib';
 use Test::More tests => 15;
 use Test::Exception;
 use Test::Deep;
@@ -15,11 +11,14 @@ use Data::Dumper;
 use strict;
 use warnings;
 
+use MT::Test qw(:cms);
+
 my $fail = 1;
 my @args;
 
-use MT::App;
-my $mt = MT::App->instance or die MT::App->errstr;
+use MT;
+# use MT::App;
+my $mt = MT->instance or die MT->errstr;
 
 
 {

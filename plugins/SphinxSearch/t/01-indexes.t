@@ -1,22 +1,15 @@
 
-use File::Spec;
-BEGIN {
-    my $mt_home = $ENV{MT_HOME} || '';
-    unshift @INC, File::Spec->catdir ($mt_home, 'lib'), File::Spec->catdir ($mt_home, 'extlib');
-}
+use strict;
+use warnings;
+
+use lib 't/lib', 'lib', 'extlib';
 
 use Test::More tests => 11;
 use Test::Deep;
 
-use strict;
-use warnings;
+use MT::Test qw ( :cms );
 
-# use lib 'plugins/SphinxSearch/lib';
-# 
-# require 'plugins/SphinxSearch/sphinx-search.pl';
-# 
-use MT::App;
-my $mt = MT::App->instance or die MT::App->errstr;
+# my $mt = MT::App->instance or die MT::App->errstr;
 
 my $plugin = MT::Plugin::SphinxSearch->instance;
 ok ($plugin, "Unable to load the plugin instance");
