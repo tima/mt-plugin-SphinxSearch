@@ -4,8 +4,6 @@ use Test::More tests => 15;
 use Test::Exception;
 use Test::Deep;
 
-use Sub::Install;
-
 use Data::Dumper;
 
 use strict;
