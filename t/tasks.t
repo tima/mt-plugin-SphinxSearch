@@ -29,7 +29,7 @@ my $mt = MT->instance or die MT->errstr;
 }
 
 my $plugin = MT::Plugin::SphinxSearch->instance;
-ok ($plugin, "Unable to load the plugin instance");
+ok ($plugin, "Load the plugin instance");
 
 SKIP:
 {
