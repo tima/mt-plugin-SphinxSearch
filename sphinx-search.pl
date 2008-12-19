@@ -53,6 +53,14 @@ sub instance {
 sub init_registry {
     my $plugin = shift;
     my $reg = {
+        config_settings => {
+            UseSphinxTasks  => {
+                default     => 1,
+            },
+            UseSphinxDistributedIndexes => {
+                default     => 0,
+            },
+        },
         applications    => {
             cms         => {
                 methods => {
@@ -697,9 +705,12 @@ sub which_indexes {
     my $plugin = shift;
     my %params = @_;
     my @indexes;
+    
+    my $use_deltas = !MT->config->UseSphinxDistributedIndexes;
+    
     if (my $indexer = $params{Indexer}) {
         if ($indexer eq 'all') {
-            push @indexes, map { $indexes{$_}->{delta} ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } keys %indexes;
+            push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } keys %indexes;
         }
         elsif ($indexer eq 'main') {
             push @indexes, map { $_ . '_index' } keys %indexes;
@@ -717,7 +728,7 @@ sub which_indexes {
             @sources = ($sources);
         }
         @sources = map { my $s = $_; if ($s =~ /::/) { $s = $s->datasource } $s; } @sources;
-        push @indexes, map { $indexes{$_}->{delta} ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } @sources;
+        push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } @sources;
     }
     
     return @indexes;
