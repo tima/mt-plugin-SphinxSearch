@@ -319,16 +319,6 @@ sub _get_sphinx_results {
     if ($app->{searchparam}{IncludeBlogs} && scalar (keys %{ $app->{searchparam}{IncludeBlogs} }) == 1) {
         ($blog_id) = keys %{ $app->{searchparam}{IncludeBlogs}};
     }
-    
-    $app->log({
-        message => $app->translate("Search: query for '[_1]'",
-              $app->{search_string}),
-        level => MT::Log::INFO(),
-        class => 'search',
-        category => 'straight_search',
-        $blog_id ? (blog_id => $blog_id) : ()
-    });
-
 
     my $spx = _get_sphinx;
 
@@ -417,12 +407,15 @@ sub _get_sphinx_results {
         require MT::Request;
         MT::Request->instance->stash ('sphinx_search_categories', \@all_cats);
     }
-    
+
+    my $filter_stash = {};
+
     if (my $author = $app->param ('author')) {
         require MT::Author;
         my @authors = MT::Author->load ({ name => $author });
         if (@authors) {
             $filters->{author_id} = [ map { $_->id } @authors ];
+			$filter_stash->{author} = shift @authors;
         }
     }
     
@@ -448,7 +441,6 @@ sub _get_sphinx_results {
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
     
-    my $filter_stash = {};
     $filter_stash->{"sphinx_filter_$_"} = join (',', @{$range_filters->{$_}}) foreach (keys %$range_filters);
     $filter_stash->{"sphinx_filter_$_"} = join (',', @{$filters->{$_}}) foreach (keys %$filters);
     
@@ -897,7 +889,8 @@ sub _process_extended_sort {
 sub sphinx_search {
     my $plugin = shift;
     my ($classes, $search, %params) = @_;
-
+	$search || = '';
+	
     my @classes;
     if (ref $classes) {
         @classes = @$classes;
@@ -920,6 +913,7 @@ sub sphinx_search {
     
     if (exists $params{Filters}) {
         foreach my $filter (keys %{ $params{Filters} }) {
+			next unless (ref ($params{Filters}->{$filter}) eq 'ARRAY' && scalar @{$params{Filters}{$filter}});
             $spx->SetFilter($filter, $params{Filters}{$filter});
         }
     }
