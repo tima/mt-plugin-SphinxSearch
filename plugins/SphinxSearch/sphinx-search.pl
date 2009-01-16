@@ -889,7 +889,7 @@ sub _process_extended_sort {
 sub sphinx_search {
     my $plugin = shift;
     my ($classes, $search, %params) = @_;
-	$search || = '';
+	$search ||= '';
 	
     my @classes;
     if (ref $classes) {
