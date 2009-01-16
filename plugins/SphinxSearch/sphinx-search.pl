@@ -572,7 +572,7 @@ sub _gen_sphinx_conf_tmpl {
     $params{ db_host } = $plugin->get_config_value ('db_host', 'system') || $app->{cfg}->DBHost;
     $params{ db_user } = $plugin->get_config_value ('db_user', 'system') || $app->{cfg}->DBUser;
     my $db_pass        = $plugin->get_config_value ('db_pass', 'system') || $app->{cfg}->DBPassword;
-    $db_pass =~ s/#/\\#/g;
+    $db_pass =~ s/#/\\#/g if ($db_pass);
     $params{ db_pass } = $db_pass;
     $params{  db_db  } = $app->{cfg}->Database;
     $params{ tmp } = $app->{cfg}->TempDir;
