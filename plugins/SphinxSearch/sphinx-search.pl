@@ -654,7 +654,7 @@ sub _gen_sphinx_conf_tmpl {
         
         
         if (my $delta = $index_hash->{delta}) {
-            $delta_query{$index} = $query{$source};
+            $delta_query{$index} = $query{$index};
             $delta_query{$index} .= $indexes{$index}->{select_values} ? " AND " : " WHERE ";
             if (exists $index_hash->{date_columns}->{$delta}) {
                 $delta_pre_query{$index} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
