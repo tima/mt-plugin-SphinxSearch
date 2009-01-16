@@ -38,22 +38,22 @@ index <TMPL_VAR NAME=INDEX>_index
 {
     html_strip          = 1
 	html_index_attrs	= img=alt,title; a=title;
-	source			    = <TMPL_VAR NAME=SOURCE>_source
-	path			    = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=SOURCE>_index
+	source			    = <TMPL_VAR NAME=INDEX>_source
+	path			    = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_index
 	morphology		    = <TMPL_VAR NAME=MORPHOLOGY>
 }
 
 <TMPL_IF NAME=DELTA_QUERY>
-source <TMPL_VAR NAME=SOURCE>_delta_source : <TMPL_VAR NAME=SOURCE>_source
+source <TMPL_VAR NAME=INDEX>_delta_source : <TMPL_VAR NAME=INDEX>_source
 {
 <TMPL_IF NAME=DELTA_PRE_QUERY>    sql_query_pre = <TMPL_VAR NAME=DELTA_PRE_QUERY></TMPL_IF>
     sql_query       = <TMPL_VAR NAME=DELTA_QUERY>
 }
 
-index <TMPL_VAR NAME=SOURCE>_delta_index : <TMPL_VAR NAME=SOURCE>_index
+index <TMPL_VAR NAME=INDEX>_delta_index : <TMPL_VAR NAME=INDEX>_index
 {
-    source          = <TMPL_VAR NAME=SOURCE>_delta_source
-    path            = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=SOURCE>_delta_index
+    source          = <TMPL_VAR NAME=INDEX>_delta_source
+    path            = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_delta_index
 }
 </TMPL_IF>
 
