@@ -16,7 +16,7 @@ use List::Util qw( max );
 use MT::Util qw( ts2epoch );
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.99.48.3mt4';
+$VERSION = '0.99.49mt4';
 $plugin = MT::Plugin::SphinxSearch->new ({
         id      => 'SphinxSearch',
         name    => 'SphinxSearch',
