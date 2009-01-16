@@ -371,7 +371,7 @@ sub _get_sphinx_results {
     # if it's a tag search,
     # grab all the tag ids we can find for a filter
     # and nix the search keyword
-    if ($app->{searchparam}{Type} eq 'tag') {
+    if ($app->mode eq 'tag') {
         require MT::Tag;
         my $tags = $app->{search_string};
         my @tag_names = MT::Tag->split(',', $tags);
@@ -935,7 +935,7 @@ sub sphinx_search {
         exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $params{Sort}->{Ascend}) :
         exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $params{Sort}->{Descend}) :
         exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $params{Sort}->{Segments}) :
-        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $plugin->_process_extended_sort ($class, $params{Sort}->{Extended})) :
+        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $params{Sort}->{Extended}) :
                                                 $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
     }
     else {
