@@ -82,6 +82,10 @@ sub init_registry {
         },
         callbacks   => {
             'MT::Template::pre_load'  => \&pre_load_template,
+            'post_init' => {
+                priority    => 1,
+                handler => \&init_sphinxable,
+            }
         },
         tags    => {
             function    => {
@@ -179,10 +183,7 @@ sub sphinx_indexer_task {
     1;
 }
 
-sub init_apps {
-    my $plugin = shift;
-    my ($app) = @_;
-
+sub init_sphinxable {
     {
         local $SIG{__WARN__} = sub { };
         *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
@@ -204,6 +205,13 @@ sub init_apps {
         date_columns => { authored_on => 1 }
     );
     MT::Comment->sphinx_init (select_values => { visible => 1 }, group_columns => [ 'entry_id' ]);
+}
+
+
+sub init_apps {
+    my $plugin = shift;
+    my ($app) = @_;
+
     
     if ($app->isa ('MT::App::Search')) {
         $plugin->init_search_app ($app);
@@ -594,9 +602,11 @@ sub _gen_sphinx_conf_tmpl {
     my %query;
     my %mva;
     my %counts;
-    foreach my $source (keys %indexes) {
+    foreach my $index (keys %indexes) {
+        my $index_hash = $indexes{$index};
+        my $source = $index_hash->{class}->datasource;
         # build any count columns first
-        if (my $counts = $indexes{$source}->{count_columns}) {
+        if (my $counts = $index_hash->{count_columns}) {
             for my $count (keys %$counts) {
                 my $what_class = $counts->{$count}->{what};
                 my $with_column = $counts->{$count}->{with};
@@ -605,27 +615,27 @@ sub _gen_sphinx_conf_tmpl {
                 next if ($@);
                 
                 my $what_ds = $what_class->datasource;
-                my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $indexes{$source}->{id_column};
-                $counts{$source}->{$count} = $count_query;
+                my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $index_hash->{id_column};
+                $counts{$index}->{$count} = $count_query;
             }            
         }
 
-        $query{$source} = "SELECT " . join(", ", map { 
-            $indexes{$source}->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $indexes{$source}->{group_columns}->{$_}        ? "${source}_$_ as " . $indexes{$source}->{group_columns}->{$_} :
-            $indexes{$source}->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
-            $counts{$source}->{$_}                          ? "(" . $counts{$source}->{$_} . ") as $_" :
+        $query{$index} = "SELECT " . join(", ", map { 
+            $index_hash->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
+            $index_hash->{group_columns}->{$_}        ? "${source}_$_ as " . $index_hash->{group_columns}->{$_} :
+            $index_hash->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
+            $counts{$index}->{$_}                          ? "(" . $counts{$index}->{$_} . ") as $_" :
                                                               $source . '_' . $_
-            } ( $indexes{$source}->{ id_column }, @{ $indexes{$source}->{ columns } }, keys %{$counts{$source}} ) ) . 
+            } ( $index_hash->{ id_column }, @{ $index_hash->{ columns } }, keys %{$counts{$index}} ) ) . 
             " FROM mt_$source";
-        if (my $sel_values = $indexes{$source}->{select_values}) {
-            $query{$source} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
+        if (my $sel_values = $index_hash->{select_values}) {
+            $query{$index} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
         }
-        $info_query{$source} = "SELECT * from mt_$source where ${source}_" . $indexes{$source}->{ id_column } . ' = $id';
+        $info_query{$index} = "SELECT * from mt_$source where ${source}_" . $index_hash->{ id_column } . ' = $id';
         
-        if ($indexes{$source}->{mva}) {
-            foreach my $mva (keys %{$indexes{$source}->{mva}}) {
-                my $cur_mva = $indexes{$source}->{mva}->{$mva};
+        if ($index_hash->{mva}) {
+            foreach my $mva (keys %{$index_hash->{mva}}) {
+                my $cur_mva = $index_hash->{mva}->{$mva};
                 my $mva_query;
                 if (ref ($cur_mva)) {
                     my $mva_source = $cur_mva->{with}->datasource;
@@ -638,24 +648,25 @@ sub _gen_sphinx_conf_tmpl {
                 else {
                     $mva_query = $cur_mva;
                 }
-                push @{$mva{$source}}, { mva_query => $mva_query, mva_name => $mva };
+                push @{$mva{$index}}, { mva_query => $mva_query, mva_name => $mva };
             }            
         }
         
         
-        if (my $delta = $indexes{$source}->{delta}) {
-            $delta_query{$source} = $query{$source};
-            $delta_query{$source} .= $indexes{$source}->{select_values} ? " AND " : " WHERE ";
-            if (exists $indexes{$source}->{date_columns}->{$delta}) {
-                $delta_pre_query{$source} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
-                $delta_query{$source} .= "${source}_${delta} > \@cutoff";
+        if (my $delta = $index_hash->{delta}) {
+            $delta_query{$index} = $query{$source};
+            $delta_query{$index} .= $indexes{$index}->{select_values} ? " AND " : " WHERE ";
+            if (exists $index_hash->{date_columns}->{$delta}) {
+                $delta_pre_query{$index} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
+                $delta_query{$index} .= "${source}_${delta} > \@cutoff";
             }
         }
     }
     $params{ source_loop } = [
         map {
                 {
-                 source => $_,
+                 index  => $_,
+                 source => $indexes{$_}->{class}->datasource,
                  query  => $query{$_},
                  info_query => $info_query{$_},
                  group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
@@ -784,8 +795,10 @@ sub sphinx_init {
     my ($class, %params) = @_;
     
     my $datasource = $class->datasource;
-
-    return if (exists $indexes{ $datasource });
+    my $index_name = $params{index} || $datasource;
+    return if (exists $indexes{ $index_name });
+    
+    my $index_hash = {};
     
     my $props = $class->properties;
 
@@ -802,17 +815,17 @@ sub sphinx_init {
         $columns = [ grep { !exists $excludes->{$_} } @$columns ];
     }
     my $id_column = $params{id_column} || $primary_key;
-    $indexes{ $datasource } = {
+    $index_hash = {
         id_column   => $id_column,
         columns     => $columns,
     };
-    $indexes{ $datasource }->{class} = $class;
-    $indexes{ $datasource }->{delta} = $params{delta};
-    $indexes{ $datasource }->{stash} = $params{stash};
-    $indexes{ $datasource }->{count_columns} = $params{count_columns};
+    $index_hash->{class} = $class;
+    $index_hash->{delta} = $params{delta};
+    $index_hash->{stash} = $params{stash};
+    $index_hash->{count_columns} = $params{count_columns};
     
     if (exists $defs->{ blog_id }) {
-        $indexes{ $datasource }->{ group_columns }->{ blog_id } = 'blog_id';
+        $index_hash->{ group_columns }->{ blog_id } = 'blog_id';
     }
     
     if (exists $props->{indexes}) {
@@ -836,35 +849,35 @@ sub sphinx_init {
                 $params{date_columns}->{$column} = 1;
             }
             else {                
-                $indexes{ $datasource }->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
+                $index_hash->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
             }
         }
     }
     
     if ($props->{audit}) {
-        $indexes{$datasource}->{date_columns}->{'created_on'}++;
-        $indexes{$datasource}->{date_columns}->{'modified_on'}++;
+        $index_hash->{date_columns}->{'created_on'}++;
+        $index_hash->{date_columns}->{'modified_on'}++;
         
-        $indexes{$datasource}->{delta} = 'modified_on' if (!$indexes{$datasource}->{delta});
+        $index_hash->{delta} = 'modified_on' if (!$index_hash->{delta});
     }
     
     if (exists $params{date_columns}) {
-        $indexes{$datasource}->{date_columns}->{$_}++ foreach (ref ($params{date_columns}) eq 'HASH' ? keys %{$params{date_columns}} : @{$params{date_columns}});
+        $index_hash->{date_columns}->{$_}++ foreach (ref ($params{date_columns}) eq 'HASH' ? keys %{$params{date_columns}} : @{$params{date_columns}});
     }
     
     if (exists $params{select_values}) {
-        $indexes{ $datasource }->{select_values} = $params{select_values};
+        $index_hash->{select_values} = $params{select_values};
     }    
     
     if (exists $params{mva}) {
-        $indexes{ $datasource }->{mva} = $params{mva};
+        $index_hash->{mva} = $params{mva};
     }
     
     if ($class->isa ('MT::Taggable')) {
         require MT::Tag;
         require MT::ObjectTag;
         # if it's taggable, setup the MVA bits
-        $indexes{ $datasource }->{ mva }->{ tag } = {
+        $index_hash->{ mva }->{ tag } = {
             to      => 'MT::Tag',
             with    => 'MT::ObjectTag',
             by      => [ 'object_id', 'tag_id' ],
@@ -872,7 +885,8 @@ sub sphinx_init {
         };
     }
     
-    $indexes{ $datasource }->{id_to_obj} = $params{id_to_obj} || sub { $class->load ($_[0]) };
+    $index_hash->{id_to_obj} = $params{id_to_obj} || sub { $class->load ($_[0]) };
+    $indexes{$index_name} = $index_hash;
 }
 
 sub _process_extended_sort {

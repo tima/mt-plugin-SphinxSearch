@@ -1,5 +1,5 @@
 <TMPL_LOOP NAME=SOURCE_LOOP>
-source <TMPL_VAR NAME=SOURCE>_source
+source <TMPL_VAR NAME=INDEX>_source
 {
     type                = mysql
 	sql_host			= <TMPL_VAR NAME=DB_HOST>
@@ -34,7 +34,7 @@ source <TMPL_VAR NAME=SOURCE>_source
     
 }
 
-index <TMPL_VAR NAME=SOURCE>_index
+index <TMPL_VAR NAME=INDEX>_index
 {
     html_strip          = 1
 	html_index_attrs	= img=alt,title; a=title;
