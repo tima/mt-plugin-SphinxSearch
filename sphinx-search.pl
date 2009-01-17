@@ -949,12 +949,14 @@ sub sphinx_search {
     
     if (my $indexes = $params{Indexes}) {
         $datasource = $indexes->[0];
+        @classes = @$indexes;
     }
-    
-    for my $c (reverse @classes) {
-        $class = $c;
-        $datasource = $class->datasource;
-        return () if (!exists $indexes{ $datasource });
+    else {
+        for my $c (reverse @classes) {
+            $class = $c;
+            $datasource = $class->datasource;
+            return () if (!exists $indexes{ $datasource });
+        }        
     }
 
     my $spx = _get_sphinx();
