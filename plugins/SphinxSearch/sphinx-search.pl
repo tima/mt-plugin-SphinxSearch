@@ -497,6 +497,7 @@ sub _get_sphinx_results {
     my $match_mode = $app->param ('match_mode') || 'all';
     
     my $results = $plugin->sphinx_search (\@classes, $search_keyword, 
+        Indexes         => \@indexes,
         Filters         => $filters,
         RangeFilters    => $range_filters,
         Sort            => $sort_mode, 
@@ -917,6 +918,11 @@ sub sphinx_search {
     # but it's working for now
     my $class;
     my $datasource;
+    
+    if (my $indexes = $params{Indexes}) {
+        $datasource = $indexes->[0];
+    }
+    
     for my $c (reverse @classes) {
         $class = $c;
         $datasource = $class->datasource;
