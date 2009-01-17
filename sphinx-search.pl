@@ -478,6 +478,34 @@ sub _get_sphinx_results {
             }
             $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
         }
+        elsif (my $lookup = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup_meta}) {
+            my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
+            eval ("require $class;");
+            next if ($@);
+            my @v = $class->search_by_meta ($lookup => $app->param ("filter_$filter"));
+            if (@blog_ids && $class->has_column ('blog_id')) {
+                my %blogs = map { $_ => 1 } @blog_ids;
+                @v = grep { $blogs{$_->blog_id} } @v;
+            }
+            next unless (@v);
+            $filters->{$filter} = [ map { $_->id } @v ];
+            
+            if (my $stash = $indexes{$indexes[0]}->{mva}->{$filter}->{stash}) {
+                if (ref ($stash) eq 'ARRAY') {
+                    if ($#v) {
+                        $filter_stash->{$stash->[1]} = \@v;
+                    }
+                    else {
+                        $filter_stash->{$stash->[0]} = $v[0];
+                    }
+                }
+                else {
+                    $filter_stash->{$stash} = \@v;
+                }
+            }
+            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
+        }
+        
         else {
             $filters->{$filter} = [ $app->param ("filter_$filter") ];            
             $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
