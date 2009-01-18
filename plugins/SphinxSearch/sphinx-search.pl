@@ -646,7 +646,7 @@ sub _gen_sphinx_conf_tmpl {
                 my $what_ds = $what_class->datasource;
                 my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $index_hash->{id_column};
                 if ($wheres) {
-                    $count_query .= 'AND ' . join (' AND ', map { "${what_ds}_$_ = \""" . $wheres->{$_} . "\""} keys %$wheres);
+                    $count_query .= ' AND ' . join (' AND ', map { "${what_ds}_$_ = \"" . $wheres->{$_} . "\"" } keys %$wheres);
                 }
                 $counts{$index}->{$count} = $count_query;
             }            
