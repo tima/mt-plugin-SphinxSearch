@@ -351,7 +351,7 @@ sub _get_sphinx_results {
     
     my $sort_mode = {};
     my $sort_mode_param = $app->param ('sort_mode') || 'descend';
-    my $sort_by_param   = $app->param ('sort_by') || $app->param ('index') =~ /\bentry\b/ ? 'authored_on' : 'created_on';
+    my $sort_by_param   = $app->param ('sort_by') || ($index =~ /\bentry\b/ ? 'authored_on' : 'created_on');
     
     if ($sort_mode_param eq 'descend') {
         $sort_mode = { Descend => $sort_by_param };
@@ -478,11 +478,11 @@ sub _get_sphinx_results {
             }
             $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
         }
-        elsif (my $lookup = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup_meta}) {
+        elsif (my $lookup_meta = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup_meta}) {
             my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
             eval ("require $class;");
             next if ($@);
-            my @v = $class->search_by_meta ($lookup => $app->param ("filter_$filter"));
+            my @v = $class->search_by_meta ($lookup_meta => $app->param ("filter_$filter"));
             if (@blog_ids && $class->has_column ('blog_id')) {
                 my %blogs = map { $_ => 1 } @blog_ids;
                 @v = grep { $blogs{$_->blog_id} } @v;
@@ -639,12 +639,15 @@ sub _gen_sphinx_conf_tmpl {
             for my $count (keys %$counts) {
                 my $what_class = $counts->{$count}->{what};
                 my $with_column = $counts->{$count}->{with};
-                
+                my $wheres = $counts->{$count}->{where};
                 eval ("require $what_class;");
                 next if ($@);
                 
                 my $what_ds = $what_class->datasource;
                 my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $index_hash->{id_column};
+                if ($wheres) {
+                    $count_query .= 'AND ' . join (' AND ', map { "${what_ds}_$_ = \""" . $wheres->{$_} . "\""} keys %$wheres);
+                }
                 $counts{$index}->{$count} = $count_query;
             }            
         }
