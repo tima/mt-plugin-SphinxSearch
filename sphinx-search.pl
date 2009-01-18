@@ -1332,10 +1332,11 @@ sub search_categories_container_tag {
 sub if_index_searched_conditional_tag {
     my ($ctx, $args) = @_;
     my $index = $args->{name} || $args->{index};
+    my %i = map { $_ => 1 } split (/\s*,\s*/, $index);
     return 0 if (!$index);
     require MT::Request;
     my $indexes = MT::Request->instance->stash ('sphinx_searched_indexes');
-    return $indexes && scalar grep { $_ eq $index } @$indexes;
+    return $indexes && scalar grep { exists $i{$_} } @$indexes;
 }
 
 sub pre_load_template {
