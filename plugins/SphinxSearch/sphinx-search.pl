@@ -639,7 +639,7 @@ sub _gen_sphinx_conf_tmpl {
             for my $count (keys %$counts) {
                 my $what_class = $counts->{$count}->{what};
                 my $with_column = $counts->{$count}->{with};
-                my $wheres = $counts->{$count}->{where};
+                my $wheres = $counts->{$count}->{select_values};
                 eval ("require $what_class;");
                 next if ($@);
                 
