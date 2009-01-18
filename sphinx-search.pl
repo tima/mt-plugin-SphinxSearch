@@ -188,6 +188,7 @@ sub init_sphinxable {
         local $SIG{__WARN__} = sub { };
         *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
         *MT::Object::sphinx_search = sub { $plugin->sphinx_search (@_); };
+        *MT::Object::sphinx_result_index = sub { shift->{__sphinx_search_index} };
     }
 
     require MT::Entry;
