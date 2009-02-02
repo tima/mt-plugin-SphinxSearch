@@ -412,7 +412,8 @@ sub date {
 
 sub author {
     my ( $cb, $app, $filters, $range_filters, $stash ) = @_;
-    if ( my $author = $app->param('author') ) {
+    my $author = $app->param('author') || $app->param('username');
+    if ( $author && !$app->param('following_data') ) {
         require MT::Author;
 
         # if there's a comma, split 'em
@@ -425,16 +426,13 @@ sub author {
             $stash->{author} = shift @authors;
         }
     }
-    elsif ( $app->param('following_data') ) {
-        if ( my $user = $app->user ) {
-            eval { require MT::Community::Friending };
-            if ( !$@ ) {
-                my @followings =
-                  MT::Community::Friending::followings( $app->user );
+    elsif ($author) {
+        eval { require MT::Community::Friending };
+        if ( !$@ ) {
+            my @followings = MT::Community::Friending::followings( $author );
 
-                $filters->{author_id} = [ map { $_->id } @followings ];
-                $stash->{author} = $user;
-            }
+            $filters->{author_id} = [ map { $_->id } @followings ];
+            $stash->{author} = $author;
         }
     }
 
