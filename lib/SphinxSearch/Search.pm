@@ -159,8 +159,7 @@ sub _get_sphinx_results {
         || $app->param('date_start')
         || $app->param('date_end') );
     $app->run_callbacks( 'sphinx_search.author', $app, $filters, $range_filters,
-        $filter_stash )
-      if ( $app->param('author') || $app->param('username') );
+        $filter_stash );
 
     $filter_stash->{"sphinx_filter_$_"} = join( ',', @{ $range_filters->{$_} } )
       foreach ( keys %$range_filters );
