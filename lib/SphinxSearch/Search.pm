@@ -146,6 +146,7 @@ sub _get_sphinx_results {
     my $filters       = { blog_id => \@blog_ids, };
     my $filter_stash  = {};
     my $range_filters = {};
+    my $vars          = {};
 
     $app->run_callbacks( 'sphinx_search.tag', $app, $filters, $range_filters,
         $filter_stash )
@@ -159,7 +160,7 @@ sub _get_sphinx_results {
         || $app->param('date_start')
         || $app->param('date_end') );
     $app->run_callbacks( 'sphinx_search.author', $app, $filters, $range_filters,
-        $filter_stash );
+        $filter_stash, $vars );
 
     $filter_stash->{"sphinx_filter_$_"} = join( ',', @{ $range_filters->{$_} } )
       foreach ( keys %$range_filters );
@@ -303,6 +304,7 @@ sub _get_sphinx_results {
     $r->stash( 'sphinx_pages_offset',  $offset );
     $r->stash( 'sphinx_pages_limit',   $limit );
     $r->stash( 'sphinx_filters',       $filter_stash );
+    $r->stash( 'tmpl_vars',            $vars );
     $r->stash( 'sphinx_sort_by',       $sort_by_param );
 
     $results;
@@ -411,7 +413,7 @@ sub date {
 }
 
 sub author {
-    my ( $cb, $app, $filters, $range_filters, $stash ) = @_;
+    my ( $cb, $app, $filters, $range_filters, $stash, $vars ) = @_;
     my $author = $app->param('author') || $app->param('username');
     my @authors = MT::Author->load( { name => $author } );
     $author = shift @authors;
@@ -430,10 +432,11 @@ sub author {
     elsif ($author) {
         eval { require MT::Community::Friending };
         if ( !$@ ) {
-            my @followings = MT::Community::Friending::followings( $author );
+            my @followings = MT::Community::Friending::followings($author);
 
-            $filters->{author_id} = [ map { $_->id } @followings ];
-            $stash->{author} = $author;
+            $filters->{author_id}   = [ map { $_->id } @followings ];
+            $stash->{author}        = $author;
+            $vars->{following_data} = 1;
         }
     }
 
@@ -453,6 +456,12 @@ sub _sphinx_search_context_init {
     if ( my $filter_stash = $r->stash('sphinx_filters') ) {
         while ( my ( $k, $v ) = each %$filter_stash ) {
             $ctx->stash( $k, $v );
+        }
+    }
+
+    if ( my $vars = $r->stash('tmpl_vars') ) {
+        while ( my ( $k, $v ) = each %$vars ) {
+            $ctx->var( $k, $v );
         }
     }
 
