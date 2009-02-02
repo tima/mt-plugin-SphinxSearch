@@ -441,4 +441,36 @@ sub author {
 
 }
 
+sub _sphinx_search_context_init {
+    my $ctx = shift;
+
+    require MT::Request;
+    my $r             = MT::Request->instance;
+    my $stash_name    = $r->stash('sphinx_stash_name');
+    my $stash_results = $r->stash('sphinx_results');
+    if ( $stash_name && $stash_results ) {
+        $ctx->stash( $stash_name, $stash_results );
+    }
+
+    if ( my $filter_stash = $r->stash('sphinx_filters') ) {
+        while ( my ( $k, $v ) = each %$filter_stash ) {
+            $ctx->stash( $k, $v );
+        }
+    }
+
+    require MT::App;
+    my $app = MT::App->instance;
+    if ( $app->param('searchall') ) {
+
+        # not cute, but it'll work
+        # and with the updated tag handler
+        # it shouldn't be exposed
+        $ctx->stash( 'search_string', 'searchall' );
+    }
+
+    $ctx->stash( 'limit',  $r->stash('sphinx_pages_limit') );
+    $ctx->stash( 'offset', $r->stash('sphinx_pages_offset') );
+    $ctx->stash( 'count',  $r->stash('sphinx_results_total') );
+}
+
 1;
