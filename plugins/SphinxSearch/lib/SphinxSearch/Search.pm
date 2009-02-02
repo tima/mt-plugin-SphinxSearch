@@ -413,6 +413,8 @@ sub date {
 sub author {
     my ( $cb, $app, $filters, $range_filters, $stash ) = @_;
     my $author = $app->param('author') || $app->param('username');
+    my @authors = MT::Author->load( { name => $author } );
+    $author = shift @authors;
     if ( $author && !$app->param('following_data') ) {
         require MT::Author;
 
@@ -420,7 +422,6 @@ sub author {
         if ( $author =~ /,/ ) {
             $author = [ split( /\s*,\s*/, $author ) ];
         }
-        my @authors = MT::Author->load( { name => $author } );
         if (@authors) {
             $filters->{author_id} = [ map { $_->id } @authors ];
             $stash->{author} = shift @authors;
