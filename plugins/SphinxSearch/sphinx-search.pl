@@ -11,10 +11,6 @@ use Sphinx;
 use File::Spec;
 use POSIX;
 
-use List::Util qw( max );
-
-use MT::Util qw( ts2epoch );
-
 use vars qw( $VERSION $plugin );
 $VERSION = '0.99.51mt4';
 $plugin = MT::Plugin::SphinxSearch->new ({
@@ -40,9 +36,7 @@ $plugin = MT::Plugin::SphinxSearch->new ({
             [ 'db_user', { Default => undef, Scope => 'system' } ],
             [ 'db_pass', { Default => undef, Scope => 'system' } ],
             [ 'use_indexer_tasks', { Default => 1, Scope => 'system' } ],
-            ]),
-                
-        init_app    => \&init_apps,        
+            ]),                
 });
 MT->add_plugin ($plugin);
 
@@ -66,6 +60,14 @@ sub init_registry {
                 methods => {
                     'gen_sphinx_conf'  => \&gen_sphinx_conf,                    
                 }
+            },
+            new_search  => {
+                callbacks   => {
+                    'sphinx_search.tag' => '$SphinxSearch::SphinxSearch::Search::tag',
+                    'sphinx_search.category'    => '$SphinxSearch::SphinxSearch::Search::category',
+                    'sphinx_search.date'    => '$SphinxSearch::SphinxSearch::Search::date',
+                    'sphinx_search.author'  => '$SphinxSearch::SphinxSearch::Search::author',
+                }
             }
         },
         tasks   => {
@@ -85,8 +87,10 @@ sub init_registry {
             'post_init' => {
                 priority    => 1,
                 handler => \&init_sphinxable,
-            }
+            },
+            # 'init_app'  => \&init_apps,
         },
+        init_app    => \&init_apps,
         tags    => {
             function    => {
                 'SearchResultsOffset'   => \&search_results_offset_tag,
@@ -145,10 +149,9 @@ sub init_registry {
     $plugin->registry ($reg);
 }
 
-my %indexes;
-
 sub sphinx_indexes {
-    return %indexes;
+    require SphinxSearch::Index;
+    return %{SphinxSearch::Index::_get_sphinx_indexes()};
 }
 
 sub check_searchd {
@@ -186,9 +189,8 @@ sub sphinx_indexer_task {
 sub init_sphinxable {
     {
         local $SIG{__WARN__} = sub { };
-        *MT::Object::sphinx_init = sub { $plugin->sphinx_init (@_); };
-        *MT::Object::sphinx_search = sub { $plugin->sphinx_search (@_); };
-        *MT::Object::sphinx_result_index = sub { shift->{__sphinx_search_index} };
+        require SphinxSearch::Sphinxable;
+        push @MT::Object::ISA, 'SphinxSearch::Sphinxable';
     }
 
     require MT::Entry;
@@ -210,75 +212,13 @@ sub init_sphinxable {
 
 
 sub init_apps {
-    my $plugin = shift;
+    my $cb = shift;
     my ($app) = @_;
-
-    
     if ($app->isa ('MT::App::Search')) {
-        $plugin->init_search_app ($app);
+        require SphinxSearch::Search;
+        SphinxSearch::Search::init_app ($cb, $app);
     }
     
-}
-
-
-sub init_search_app {
-    my $plugin = shift;
-    my ($app) = @_;
-        
-    if ($app->id eq 'search') {
-        local $SIG{__WARN__} = sub { };
-        *MT::App::Search::_straight_search = \&straight_sphinx_search;
-        *MT::App::Search::_tag_search      = \&straight_sphinx_search;
-        *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
-        my $orig_results = \&MT::App::Search::Context::_hdlr_results;
-        *MT::App::Search::Context::_hdlr_results = sub {
-            _resort_sphinx_results (@_);
-            $orig_results->(@_);
-        };        
-        
-        # we need to short-circuit this as the search string has been stuffed
-        # in the case of searchall=1
-        my $orig_search_string = \&MT::App::Search::Context::_hdlr_search_string;
-        *MT::App::Search::Context::_hdlr_search_string = sub {
-            $app->param ('searchall') ? '' : $orig_search_string->(@_);
-        };
-        
-        my $orig_init = \&MT::App::Search::Context::init;
-        *MT::App::Search::Context::init = sub {
-            my $res = $orig_init->(@_);
-            _sphinx_search_context_init (@_);
-            return $res;
-        }
-    }
-    elsif ($app->id eq 'new_search') {
-        local $SIG{__WARN__} = sub { };
-        *MT::App::Search::execute = sub {
-            my $results = _get_sphinx_results ($_[0]);
-            my @results = (@{$results->{result_objs}});
-            return ($results->{query_results}->{total}, sub { shift @results });
-        };
-        my $orig_search_terms = \&MT::App::Search::search_terms;
-        *MT::App::Search::search_terms = sub {
-            return ( '' ) if ($_[0]->param ('searchall'));
-            return $orig_search_terms->(@_);
-        };
-        my $orig_prep_context = \&MT::App::Search::prepare_context;
-        *MT::App::Search::prepare_context = sub {
-            my $ctx = $orig_prep_context->(@_);
-            _sphinx_search_context_init ($ctx);
-            return $ctx;
-        }
-    }
-
-}
-
-sub _resort_sphinx_results {
-    my ($ctx, $args, $cond) = @_;
-    
-    my $results = $ctx->stash ('results') || return;
-    
-    $results = [ sort { $a->{entry}->{__sphinx_search_index} <=> $b->{entry}->{__sphinx_search_index} } @$results ];
-    $ctx->stash ('results', $results);
 }
 
 sub _sphinx_search_context_init {
@@ -312,284 +252,6 @@ sub _sphinx_search_context_init {
     $ctx->stash ('count', $r->stash ('sphinx_results_total'));
 }
 
-sub _get_sphinx {
-    require Sphinx;
-    my $spx = Sphinx->new;
-    $spx->SetServer($plugin->get_config_value ('searchd_host', 'system'), $plugin->get_config_value ('searchd_port', 'system'));
-
-    return $spx;
-}
-
-sub _get_sphinx_results {
-    my $app = shift;
-    my ($res_callback) = @_;
-    require MT::Log;
-    my $blog_id;
-    if ($app->{searchparam}{IncludeBlogs} && scalar (keys %{ $app->{searchparam}{IncludeBlogs} }) == 1) {
-        ($blog_id) = keys %{ $app->{searchparam}{IncludeBlogs}};
-    }
-
-    my $spx = _get_sphinx;
-
-    my @indexes = split (/,/, $app->param ('index') || 'entry');
-    my @classes;
-    foreach my $index (@indexes) {
-        my $class = $indexes{$index}->{class};
-        eval ("require $class;");
-        if ($@) {
-            return $app->error ("Error loading $class ($index): " . $@);
-        }
-        push @classes, $class;
-    }
-    
-    my %classes = map { $_ => 1 } @classes;
-    # if MT::Entry is in there, it should be first, just in case
-    @classes = ( delete $classes{'MT::Entry'} ? ('MT::Entry') : (), keys %classes);
-
-    my $index = $app->param ('index') || 'entry';
-    my $class = $indexes{ $index }->{class};
-    my $search_keyword = $app->{search_string};
-    
-    my $sort_mode = {};
-    my $sort_mode_param = $app->param ('sort_mode') || 'descend';
-    my $sort_by_param   = $app->param ('sort_by') || ($index =~ /\bentry\b/ ? 'authored_on' : 'created_on');
-    
-    if ($sort_mode_param eq 'descend') {
-        $sort_mode = { Descend => $sort_by_param };
-    }
-    elsif ($sort_mode_param eq 'ascend') {
-        $sort_mode = { Ascend => $sort_by_param };
-    }
-    elsif ($sort_mode_param eq 'relevance') {
-        $sort_mode = {};
-    }
-    elsif ($sort_mode_param eq 'extended') {
-        if (my $extended_sort = $app->param ('extended_sort')) {
-            $sort_mode = { Extended => $extended_sort };
-        }
-    }
-    elsif ($sort_mode_param eq 'segments') {
-        $sort_mode = { Segments => 'authored_on' };
-    }
-    
-    my @blog_ids = keys %{ $app->{ searchparam }{ IncludeBlogs } };
-    my $filters = {
-        blog_id => \@blog_ids,
-    };
-
-    # if it's a tag search,
-    # grab all the tag ids we can find for a filter
-    # and nix the search keyword
-    if ($app->mode eq 'tag') {
-        require MT::Tag;
-        my $tags = $app->{search_string};
-        my @tag_names = MT::Tag->split(',', $tags);
-        my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
-        my @tags = MT::Tag->load({ name => [ keys %tags ] });
-        my @tag_ids;
-        foreach (@tags) {
-            push @tag_ids, $_->id;
-            my @more = MT::Tag->load({ n8d_id => $_->n8d_id ? $_->n8d_id : $_->id });
-            push @tag_ids, $_->id foreach @more;
-        }
-        @tag_ids = ( 0 ) unless @tags;
-        
-        $filters->{tag} = \@tag_ids;
-        $search_keyword = undef;
-    }
-
-    my $range_filters = {};
-    
-    if (my $cat_basename = $app->param ('category') || $app->param ('category_basename')) {
-        my @all_cats;
-        require MT::Category;
-        foreach my $cat_base (split (/,/, $cat_basename)) {
-            my @cats = MT::Category->load ({ blog_id => \@blog_ids, basename => $cat_base });
-            if (@cats) {
-                push @all_cats, @cats;
-            }
-        }
-        if (@all_cats) {
-            $filters->{category} = [ map { $_->id } @all_cats ];
-        }
-        
-        require MT::Request;
-        MT::Request->instance->stash ('sphinx_search_categories', \@all_cats);
-    }
-
-    my $filter_stash = {};
-
-    if (my $author = $app->param ('author')) {
-        require MT::Author;
-        my @authors = MT::Author->load ({ name => $author });
-        if (@authors) {
-            $filters->{author_id} = [ map { $_->id } @authors ];
-			$filter_stash->{author} = shift @authors;
-        }
-    }
-    
-    if ($app->param ('date_start') || $app->param ('date_end')) {
-        my $date_start = $app->param ('date_start');
-        if ($date_start) {
-            $date_start = ts2epoch ($blog_id, $date_start . '0000');
-        }
-        else {
-            $date_start = 0;
-        }
-        
-        my $date_end = $app->param ('date_end');
-        if ($date_end) {
-            $date_end = ts2epoch ($blog_id, $date_end . '0000');
-        }
-        else {
-            # max timestamp value? maybe 0xFFFFFFFF instead?
-            # this is probably large enough
-            $date_end = 2147483647;
-        }
-        
-        $range_filters->{created_on} = [ $date_start, $date_end ];
-    }
-    
-    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$range_filters->{$_}}) foreach (keys %$range_filters);
-    $filter_stash->{"sphinx_filter_$_"} = join (',', @{$filters->{$_}}) foreach (keys %$filters);
-    
-    # General catch-all for filters
-    my %params = $app->param_hash;
-    for my $filter (map { s/^filter_//; $_ } grep { /^filter_/ } keys %params) {
-        if (my $lookup = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup}) {
-            my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
-            eval ("require $class;");
-            next if ($@);
-            my @v = $class->load ({ $lookup => $app->param ("filter_$filter"), blog_id => \@blog_ids });
-            next unless (@v);
-            $filters->{$filter} = [ map { $_->id } @v ];
-            
-            if (my $stash = $indexes{$indexes[0]}->{mva}->{$filter}->{stash}) {
-                if (ref ($stash) eq 'ARRAY') {
-                    if ($#v) {
-                        $filter_stash->{$stash->[1]} = \@v;
-                    }
-                    else {
-                        $filter_stash->{$stash->[0]} = $v[0];
-                    }
-                }
-                else {
-                    $filter_stash->{$stash} = \@v;
-                }
-            }
-            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
-        }
-        elsif (my $lookup_meta = $indexes{$indexes[0]}->{mva}->{$filter}->{lookup_meta}) {
-            my $class = $indexes{$indexes[0]}->{mva}->{$filter}->{to};
-            eval ("require $class;");
-            next if ($@);
-            my @v = $class->search_by_meta ($lookup_meta => $app->param ("filter_$filter"));
-            if (@blog_ids && $class->has_column ('blog_id')) {
-                my %blogs = map { $_ => 1 } @blog_ids;
-                @v = grep { $blogs{$_->blog_id} } @v;
-            }
-            next unless (@v);
-            $filters->{$filter} = [ map { $_->id } @v ];
-            
-            if (my $stash = $indexes{$indexes[0]}->{mva}->{$filter}->{stash}) {
-                if (ref ($stash) eq 'ARRAY') {
-                    if ($#v) {
-                        $filter_stash->{$stash->[1]} = \@v;
-                    }
-                    else {
-                        $filter_stash->{$stash->[0]} = $v[0];
-                    }
-                }
-                else {
-                    $filter_stash->{$stash} = \@v;
-                }
-            }
-            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
-        }
-        
-        else {
-            $filters->{$filter} = [ $app->param ("filter_$filter") ];            
-            $filter_stash->{"sphinx_filter_$filter"} = $app->param ("filter_$filter");
-        }
-    }
-    for my $filter (map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params) {
-        require String::CRC32;
-        $filters->{$filter . '_crc32'} = [ String::CRC32::crc32 ($app->param ("sfilter_$filter")) ];
-        $filter_stash->{"sphinx_filter_$filter"} = $app->param ("sfilter_$filter");
-    }
-    
-    my $limit  = $app->param ('limit') || $app->{searchparam}{SearchMaxResults};
-    my $offset = $app->param ('offset') || 0;
-    $offset = $limit * ($app->param ('page') - 1) if (!$offset && $limit && $app->param ('page'));
-    my $max    = MT::Entry->count ({ status => MT::Entry::RELEASE(), blog_id => \@blog_ids });
-    
-    my $match_mode = $app->param ('match_mode') || 'all';
-    
-    my $results = $plugin->sphinx_search (\@classes, $search_keyword, 
-        Indexes         => \@indexes,
-        Filters         => $filters,
-        RangeFilters    => $range_filters,
-        Sort            => $sort_mode, 
-        Offset          => $offset, 
-        Limit           => $limit,
-        Match           => $match_mode,
-        Max             => $max,
-    );
-    my $i = 0;
-    if (my $stash = $indexes{$indexes[0]}->{stash}) {
-        require MT::Request;
-        my $r = MT::Request->instance;
-        $r->stash ('sphinx_stash_name', $stash);
-        $r->stash ('sphinx_results', $results->{result_objs});        
-    }
-    elsif ($res_callback) {
-        foreach my $o (@{$results->{result_objs}}) {
-            $res_callback->($o, $i++);
-        }        
-    }
-    
-    my $num_pages = ceil ($results->{query_results}->{total} / $limit);
-    my $cur_page  = int ($offset / $limit) + 1;
-    
-    require MT::Request;
-    my $r = MT::Request->instance;
-    $r->stash ('sphinx_searched_indexes', [ @indexes ]);
-    $r->stash ('sphinx_results_total', $results->{query_results}->{total});
-    $r->stash ('sphinx_results_total_found', $results->{query_results}->{total_found});
-    $r->stash ('sphinx_pages_number', $num_pages);
-    $r->stash ('sphinx_pages_current', $cur_page);
-    $r->stash ('sphinx_pages_offset', $offset);
-    $r->stash ('sphinx_pages_limit', $limit);
-    $r->stash ('sphinx_filters', $filter_stash);
-    $r->stash ('sphinx_sort_by', $sort_by_param);
-    
-    $results;
-}
-
-
-sub result_count_tag {
-    my ($ctx, $args) = @_;
-    require MT::Request;
-    my $r = MT::Request->instance;
-    return $r->stash ('sphinx_results_total') || 0;
-}
-
-sub straight_sphinx_search {
-    my $app = shift;
-
-    # Skip out unless either there *is* a search term, or we're explicitly searching all
-    return 1 unless ($app->{search_string} =~ /\S/ || $app->param ('searchall'));
-
-    my (%hits);
-    my $results = _get_sphinx_results ($app, sub {
-        my ($o, $i) = @_;
-        my $blog_id = $o->blog_id;
-        $o->{__sphinx_search_index} = $i;
-        $app->_store_hit_data ($o->blog, $o, $hits{$blog_id}++); 
-    });
-    1;
-}
-
 sub _pid_path {
     my $plugin = shift;
     my $pid_file = $plugin->get_config_value ('searchd_pid_path', 'system');
@@ -599,136 +261,6 @@ sub _pid_path {
     return $sphinx_file_path;
 }
 
-sub _gen_sphinx_conf_tmpl {
-    my $plugin = shift;
-    my $tmpl = $plugin->load_tmpl ('sphinx.conf.tmpl') or die $plugin->errstr;
-    my %params;
-    
-    my $app = MT->instance;
-    $params{searchd_port} = $plugin->get_config_value ('searchd_port', 'system');
-    
-    $params{ db_host } = $plugin->get_config_value ('db_host', 'system') || $app->{cfg}->DBHost;
-    $params{ db_user } = $plugin->get_config_value ('db_user', 'system') || $app->{cfg}->DBUser;
-    my $db_pass        = $plugin->get_config_value ('db_pass', 'system') || $app->{cfg}->DBPassword;
-    $db_pass =~ s/#/\\#/g if ($db_pass);
-    $params{ db_pass } = $db_pass;
-    $params{  db_db  } = $app->{cfg}->Database;
-    $params{ tmp } = $app->{cfg}->TempDir;
-    $params{ file_path } = $plugin->get_config_value ('sphinx_file_path', 'system') || $app->{cfg}->TempDir;
-    $params{ pid_path } = $plugin->_pid_path;
-    $params{ morphology } = $plugin->get_config_value ('index_morphology', 'system') || 'none';
- 
-    require MT::Entry;
-    my @num_entries = ();
-    my $iter = MT::Entry->count_group_by ({ status => MT::Entry::RELEASE() }, { group => [ 'blog_id' ] });
-    my $entry_count;
-    push @num_entries, $entry_count while (($entry_count) = $iter->());
-    my $max_entries = int (1.5 * max @num_entries);
-    $params{ max_matches } = $max_entries > 1000 ? $max_entries : 1000;
- 
-    my %info_query;
-    my %delta_query;
-    my %delta_pre_query;
-    my %query;
-    my %mva;
-    my %counts;
-    foreach my $index (keys %indexes) {
-        my $index_hash = $indexes{$index};
-        my $source = $index_hash->{class}->datasource;
-        # build any count columns first
-        if (my $counts = $index_hash->{count_columns}) {
-            for my $count (keys %$counts) {
-                my $what_class = $counts->{$count}->{what};
-                my $with_column = $counts->{$count}->{with};
-                my $wheres = $counts->{$count}->{select_values};
-                eval ("require $what_class;");
-                next if ($@);
-                
-                my $what_ds = $what_class->datasource;
-                my $count_query = "SELECT count(*) from mt_$what_ds WHERE ${what_ds}_$with_column = ${source}_" . $index_hash->{id_column};
-                if ($wheres) {
-                    $count_query .= ' AND ' . join (' AND ', map { "${what_ds}_$_ = \"" . $wheres->{$_} . "\"" } keys %$wheres);
-                }
-                $counts{$index}->{$count} = $count_query;
-            }            
-        }
-
-        $query{$index} = "SELECT " . join(", ", map { 
-            $index_hash->{date_columns}->{$_}         ? 'UNIX_TIMESTAMP(' . $source . '_' . $_ . ') as ' . $_ :
-            $index_hash->{group_columns}->{$_}        ? "${source}_$_ as " . $index_hash->{group_columns}->{$_} :
-            $index_hash->{string_group_columns}->{$_} ? ($source . '_' . $_, "CRC32(${source}_$_) as ${_}_crc32") : 
-            $counts{$index}->{$_}                          ? "(" . $counts{$index}->{$_} . ") as $_" :
-                                                              $source . '_' . $_
-            } ( $index_hash->{ id_column }, @{ $index_hash->{ columns } }, keys %{$counts{$index}} ) ) . 
-            " FROM mt_$source";
-        if (my $sel_values = $index_hash->{select_values}) {
-            $query{$index} .= " WHERE " . join (" AND ", map { "${source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
-        }
-        $info_query{$index} = "SELECT * from mt_$source where ${source}_" . $index_hash->{ id_column } . ' = $id';
-        
-        if ($index_hash->{mva}) {
-            foreach my $mva (keys %{$index_hash->{mva}}) {
-                my $cur_mva = $index_hash->{mva}->{$mva};
-                my $mva_query;
-                if (ref ($cur_mva)) {
-                    my $mva_source = $cur_mva->{with}->datasource;
-                    $mva_query = "SELECT " . join (', ', map { "${mva_source}_$_" } @{$cur_mva->{by}}) . " from mt_" . $mva_source;
-                    if (my $sel_values = $cur_mva->{select_values}) {
-                        $mva_query .= " WHERE " . join (" AND ", map { "${mva_source}_$_ = \"" . $sel_values->{$_} . "\""} keys %$sel_values);
-                    }
-                    
-                }
-                else {
-                    $mva_query = $cur_mva;
-                }
-                push @{$mva{$index}}, { mva_query => $mva_query, mva_name => $mva };
-            }            
-        }
-        
-        
-        if (my $delta = $index_hash->{delta}) {
-            $delta_query{$index} = $query{$index};
-            $delta_query{$index} .= $indexes{$index}->{select_values} ? " AND " : " WHERE ";
-            if (exists $index_hash->{date_columns}->{$delta}) {
-                $delta_pre_query{$index} = 'set @cutoff = date_sub(NOW(), INTERVAL 36 HOUR)';
-                $delta_query{$index} .= "${source}_${delta} > \@cutoff";
-            }
-        }
-    }
-    $params{ source_loop } = [
-        map {
-                {
-                 index  => $_,
-                 source => $indexes{$_}->{class}->datasource,
-                 query  => $query{$_},
-                 info_query => $info_query{$_},
-                 group_loop    => [ map { { group_column => $_ } } ( values %{$indexes{$_}->{group_columns}}, keys %{$counts{$_}} ) ],
-                 string_group_loop => [ map { { string_group_column => $_ } } keys %{$indexes{$_}->{string_group_columns}} ],
-                 date_loop  => [ map { { date_column => $_ } } keys %{$indexes{$_}->{date_columns}} ],
-                 delta_pre_query => $delta_pre_query{$_},
-                 delta_query  => $delta_query{$_},
-                 mva_loop   => $mva{$_} || [],
-                } 
-        }
-        keys %indexes
-    ];
-    $tmpl->param (\%params);
-    $tmpl;
-}
-
-
-sub gen_sphinx_conf {
-    my $app = shift;
-    my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
-    
-    my $str = $app->build_page ($tmpl);
-    die $app->errstr if (!$str);
-    $app->{no_print_body} = 1;
-    $app->set_header("Content-Disposition" => "attachment; filename=sphinx.conf");
-    $app->send_http_header ('text/plain');
-    $app->print ($str);
-}
-
 sub run_cmd {
     my $plugin = shift;
     my ($cmd) = @_;
@@ -736,40 +268,6 @@ sub run_cmd {
     my $return_code = $? / 256;
     $return_code ? $plugin->error ($res) : 1;
 }
-
-sub which_indexes {
-    my $plugin = shift;
-    my %params = @_;
-    my @indexes;
-    
-    my $use_deltas = !MT->config->UseSphinxDistributedIndexes;
-    
-    if (my $indexer = $params{Indexer}) {
-        if ($indexer eq 'all') {
-            push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } keys %indexes;
-        }
-        elsif ($indexer eq 'main') {
-            push @indexes, map { $_ . '_index' } keys %indexes;
-        }
-        elsif ($indexer eq 'delta') {
-            push @indexes, map { $_ . '_delta_index' } grep { $indexes{$_}->{delta} } keys %indexes;
-        }        
-    }
-    elsif (my $sources = $params{Source}) {
-        my @sources;
-        if (ref ($sources)) {
-            @sources = @$sources;
-        }
-        else {
-            @sources = ($sources);
-        }
-        @sources = map { my $s = $_; if ($s =~ /::/) { $s = $s->datasource } $s; } @sources;
-        push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } @sources;
-    }
-    
-    return @indexes;
-}
-
 
 sub start_indexer {
     my $plugin = shift;
@@ -811,6 +309,8 @@ sub start_searchd {
     
     # Check for lock files and nix them if they exist
     # it's assumed that searchd is *not* running when this function is called
+    require SphinxSearch::Index;
+    my %indexes = %{SphinxSearch::Index::_get_sphinx_indexes()};
     foreach my $source (keys %indexes) {
         my $lock_path = File::Spec->catfile ($file_path, $source . '_index.spl');
         if (-f $lock_path) {
@@ -823,105 +323,6 @@ sub start_searchd {
     $plugin->run_cmd ("$searchd_path --config $conf_path");
 }
 
-sub sphinx_init {
-    my $plugin = shift;
-    my ($class, %params) = @_;
-    
-    my $datasource = $class->datasource;
-    my $index_name = $params{index} || $datasource;
-    return if (exists $indexes{ $index_name });
-    
-    my $index_hash = {};
-    
-    my $props = $class->properties;
-
-    my $primary_key = $props->{primary_key};
-    my $defs = $class->column_defs;
-    my $columns = [ grep { $_ ne $primary_key } keys %$defs ];
-    my $columns_hash = { map { $_ => 1 } @$columns };
-    if ($params{include_columns}) {
-        my $includes = { map { $_ => 1} @{$params{include_columns}} };
-        $columns = [ grep {exists $includes->{$_}} @$columns ];
-    }
-    elsif ($params{exclude_columns}) {
-        my $excludes = { map { $_ => 1 } @{$params{exclude_columns}} };
-        $columns = [ grep { !exists $excludes->{$_} } @$columns ];
-    }
-    my $id_column = $params{id_column} || $primary_key;
-    $index_hash = {
-        id_column   => $id_column,
-        columns     => $columns,
-    };
-    $index_hash->{class} = $class;
-    $index_hash->{delta} = $params{delta};
-    $index_hash->{stash} = $params{stash};
-    $index_hash->{count_columns} = $params{count_columns};
-    
-    if (exists $defs->{ blog_id }) {
-        $index_hash->{ group_columns }->{ blog_id } = 'blog_id';
-    }
-    
-    if (exists $props->{indexes}) {
-        # push all the indexes that are actual columns
-        push @{$params{group_columns}}, grep { $columns_hash->{$_} } keys %{$props->{indexes}};
-    }
-    
-    if (exists $params{group_columns}) {
-        for my $column (@{$params{group_columns}}) {
-            next if ($column eq $id_column); # skip if this is the id column, don't need to group on it after all
-            my $name;
-            if ('HASH' eq ref ($column)) {
-                ($column, $name) = each (%$column);
-            }
-            else {
-                $name = $column;
-            }
-            my $col_type = $defs->{$column}->{type};
-            if ($col_type =~ /^(datetime|timestamp)/) {
-                # snuck in from indexes, we should push it into the date columns instead
-                $params{date_columns}->{$column} = 1;
-            }
-            else {                
-                $index_hash->{ $defs->{$column}->{type} =~ /^(string|text)$/ ? 'string_group_columns' : 'group_columns' }->{$column} = $name;
-            }
-        }
-    }
-    
-    if ($props->{audit}) {
-        $index_hash->{date_columns}->{'created_on'}++;
-        $index_hash->{date_columns}->{'modified_on'}++;
-        
-        $index_hash->{delta} = 'modified_on' if (!$index_hash->{delta});
-    }
-    
-    if (exists $params{date_columns}) {
-        $index_hash->{date_columns}->{$_}++ foreach (ref ($params{date_columns}) eq 'HASH' ? keys %{$params{date_columns}} : @{$params{date_columns}});
-    }
-    
-    if (exists $params{select_values}) {
-        $index_hash->{select_values} = $params{select_values};
-    }    
-    
-    if (exists $params{mva}) {
-        $index_hash->{mva} = $params{mva};
-    }
-    
-    if ($class->isa ('MT::Taggable')) {
-        require MT::Tag;
-        require MT::ObjectTag;
-        # if it's taggable, setup the MVA bits
-        $index_hash->{ mva }->{ tag } = {
-            to      => 'MT::Tag',
-            with    => 'MT::ObjectTag',
-            by      => [ 'object_id', 'tag_id' ],
-            select_values   => { object_datasource => $datasource },
-        };
-    }
-    
-    $index_hash->{id_to_obj} = $params{id_to_obj} || sub { $class->load ($_[0]) };
-    $indexes{$index_name} = $index_hash;
-}
-
 sub _process_extended_sort {
     my $plugin = shift;
     my ($class, $sort_string) = @_;
@@ -930,127 +331,6 @@ sub _process_extended_sort {
     
     $sort_string =~ s/(?<!@)\b(\w+)\b(?!(?:,|$))/${datasource}_$1/gi;    
     $sort_string;
-}
-
-
-sub sphinx_search {
-    my $plugin = shift;
-    my ($classes, $search, %params) = @_;
-	$search ||= '';
-	
-    my @classes;
-    if (ref $classes) {
-        @classes = @$classes;
-    }
-    else {
-        @classes = ($classes);
-    }
-
-    # I'm sure there's a better way to do this bit
-    # but it's working for now
-    my $class;
-    my $datasource;
-    
-    if (my $indexes = $params{Indexes}) {
-        $datasource = $indexes->[0];
-        @classes = @$indexes;
-    }
-    else {
-        for my $c (reverse @classes) {
-            $class = $c;
-            $datasource = $class->datasource;
-            return () if (!exists $indexes{ $datasource });
-        }        
-    }
-
-    my $spx = _get_sphinx();
-    
-    if (exists $params{Filters}) {
-        foreach my $filter (keys %{ $params{Filters} }) {
-			next unless (ref ($params{Filters}->{$filter}) eq 'ARRAY' && scalar @{$params{Filters}{$filter}});
-            $spx->SetFilter($filter, $params{Filters}{$filter});
-        }
-    }
-    
-    if (exists $params{SFilters}) {
-        require String::CRC32;
-        foreach my $filter (keys %{ $params{SFilters} }) {
-            $spx->SetFilter ($filter . '_crc32', [ map { String::CRC32::crc32 ($_) } @{$params{SFilters}{$filter}} ] );
-        }
-    }
-    
-    if (exists $params{RangeFilters}) {
-        foreach my $filter (keys %{ $params{RangeFilters} }) {
-            $spx->SetFilterRange ($filter, @{$params{RangeFilters}->{$filter}});
-        }
-    }
-    
-    if (exists $params{Sort}) {
-        exists $params{Sort}->{Ascend}      ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_ASC, $params{Sort}->{Ascend}) :
-        exists $params{Sort}->{Descend}     ?   $spx->SetSortMode (Sphinx::SPH_SORT_ATTR_DESC, $params{Sort}->{Descend}) :
-        exists $params{Sort}->{Segments}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_TIME_SEGMENTS, $params{Sort}->{Segments}) :
-        exists $params{Sort}->{Extended}    ?   $spx->SetSortMode (Sphinx::SPH_SORT_EXTENDED, $params{Sort}->{Extended}) :
-                                                $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
-    }
-    else {
-        # Default to explicitly setting the sort mode to relevance
-        $spx->SetSortMode (Sphinx::SPH_SORT_RELEVANCE);
-    }
-    
-    if (exists $params{Match}) {
-        my $match = $params{Match};
-        $match eq 'extended'? $spx->SetMatchMode (Sphinx::SPH_MATCH_EXTENDED):
-        $match eq 'boolean' ? $spx->SetMatchMode (Sphinx::SPH_MATCH_BOOLEAN) :
-        $match eq 'phrase'  ? $spx->SetMatchMode (Sphinx::SPH_MATCH_PHRASE)  :
-        $match eq 'any'     ? $spx->SetMatchMode (Sphinx::SPH_MATCH_ANY)     :
-                              $spx->SetMatchMode (Sphinx::SPH_MATCH_ALL);
-    }
-    else {
-        $spx->SetMatchMode (Sphinx::SPH_MATCH_ALL);
-    }
-    
-    my $offset = 0;
-    my $limit  = 200;
-    my $max    = 0;
-    if (exists $params{Offset}) {
-        $offset = $params{Offset};
-    }
-    
-    if (exists $params{Limit}) {
-        $limit = $params{Limit};
-    }
-    
-    if (exists $params{Max}) {
-        $max = $params{Max};
-    }
-    
-    $spx->SetLimits ($offset, $limit, $max);
-    
-    my $results = $spx->Query ($search, join ( ' ', $plugin->which_indexes (Source => [ @classes ] ) ) );
-    if (!$results) {
-        MT->instance->log ({
-            message => "Error querying searchd daemon: " . $spx->GetLastError,
-            level   => MT::Log::ERROR(),
-            class   => 'search',
-            category    => 'straight_search',
-        });
-        return ();
-    }
-
-    my @result_objs = ();
-    my $meth = $indexes{ $datasource }->{id_to_obj} or die "No id_to_obj method for $datasource";
-    foreach my $match (@{$results->{ matches }}) {
-        my $id = $match->{ doc };
-        my $o = $meth->($id) or next;
-        push @result_objs, $o;
-    }
-    
-    return @result_objs if wantarray;
-    return {
-        result_objs     => [ @result_objs ],
-        query_results   => $results,
-    };
-    
 }
 
 sub search_results_page_loop_container_tag {
@@ -1291,7 +571,7 @@ sub search_categories_container_tag {
     my($ctx, $args, $cond) = @_;
 
     require MT::Request;
-    my $cats = MT::Request->instance->stash ('sphinx_search_categories');
+    my $cats = $ctx->stash ('sphinx_search_categories');
     return '' if (!$cats);
     require MT::Placement;
 

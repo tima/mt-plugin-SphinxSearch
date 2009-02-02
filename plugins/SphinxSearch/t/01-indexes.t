@@ -4,7 +4,7 @@ use warnings;
 
 use lib 't/lib', 'lib', 'extlib';
 
-use Test::More tests => 11;
+use Test::More tests => 23;
 use Test::Deep;
 
 use MT::Test qw ( :cms );
@@ -12,34 +12,70 @@ use MT::Test qw ( :cms );
 # my $mt = MT::App->instance or die MT::App->errstr;
 
 my $plugin = MT::Plugin::SphinxSearch->instance;
-ok ($plugin, "Unable to load the plugin instance");
+ok( $plugin, "Unable to load the plugin instance" );
+
+require_ok('SphinxSearch::Index');
 
 my %indexes = $plugin->sphinx_indexes;
 
-ok (exists $indexes{entry}, "Unable to find entry index information");
+sub check_indexes {
+    my ( $params, $indexes, $name ) = @_;
 
-is (scalar $plugin->which_indexes, 0, "No parameters to which_indexes should return empty list");
+    require SphinxSearch::Index;
+    my @indexes = SphinxSearch::Index->which_indexes(%$params);
 
-my @all_indexer_indexes = $plugin->which_indexes (Indexer => 'all');
-cmp_bag (\@all_indexer_indexes, [ qw( entry_index entry_delta_index comment_index comment_delta_index ) ], "All indexer indexes");
+    for my $i (@$indexes) {
+        ok( ( scalar grep { /^$i$/ } @indexes ), "$name contains $i" );
+    }
+}
 
-my @main_indexer_indexes = $plugin->which_indexes (Indexer => 'main');
-cmp_bag (\@main_indexer_indexes, [ qw( comment_index entry_index ) ], "Main indexer indexes");
+ok( exists $indexes{entry}, "Unable to find entry index information" );
 
-my @delta_indexer_indexes = $plugin->which_indexes (Indexer => 'delta');
-cmp_bag (\@delta_indexer_indexes, [ qw( entry_delta_index comment_delta_index ) ], "Delta indexer indexes");
+is( scalar SphinxSearch::Index->which_indexes,
+    0, "No parameters to which_indexes should return empty list" );
 
-my @unknown_indexer_indexes = $plugin->which_indexes (Indexer => 'unknown');
-ok (!@unknown_indexer_indexes, "Unknown indexer indexes");
+check_indexes(
+    { Indexer => 'all' },
+    [qw( entry_index entry_delta_index comment_index comment_delta_index )],
+    "All indexer indexes"
+);
 
-my @entry_indexes = $plugin->which_indexes (Source => 'entry');
-cmp_bag (\@entry_indexes, [ qw( entry_index entry_delta_index ) ], "Entry source indexes");
+check_indexes(
+    { Indexer => 'main' },
+    [qw( comment_index entry_index )],
+    "Main indexer indexes"
+);
 
-my @entry_class_indexes = $plugin->which_indexes (Source => 'MT::Entry');
-cmp_bag (\@entry_class_indexes, [ qw( entry_index entry_delta_index ) ], "Entry class source indexes");
+check_indexes(
+    { Indexer => 'delta' },
+    [qw( entry_delta_index comment_delta_index )],
+    "Delta indexer indexes"
+);
 
-my @entry_array_indexes = $plugin->which_indexes (Source => [ 'entry' ]);
-cmp_bag (\@entry_array_indexes, [ qw( entry_index entry_delta_index ) ], "Entry array source indexes");
+my @unknown_indexer_indexes =
+  SphinxSearch::Index->which_indexes( Indexer => 'unknown' );
+ok( !@unknown_indexer_indexes, "Unknown indexer indexes" );
 
-my @entry_and_comment_indexes = $plugin->which_indexes (Source => [ qw( entry comment ) ]);
-cmp_bag (\@entry_and_comment_indexes, [ qw( entry_index entry_delta_index comment_index comment_delta_index ) ], "Entry and comment source indexes");
+check_indexes(
+    { Source => 'entry' },
+    [qw( entry_index entry_delta_index )],
+    "Entry source indexes"
+);
+
+check_indexes(
+    { Source => 'MT::Entry' },
+    [qw( entry_index entry_delta_index )],
+    "Entry class source indexes"
+);
+
+check_indexes(
+    { Source => ['entry'] },
+    [qw( entry_index entry_delta_index )],
+    "Entry array source indexes"
+);
+
+check_indexes(
+    { Source => [qw( entry comment )] },
+    [qw( entry_index entry_delta_index comment_index comment_delta_index )],
+    "Entry and comment source indexes"
+);
