@@ -426,7 +426,7 @@ sub author {
             $stash->{author} = shift @authors;
         }
     }
-    elsif ( $app->param('followed_data') ) {
+    elsif ( $app->param('following_data') ) {
         if ( my $user = $app->user ) {
             eval { require MT::Community::Friending };
             if ( !$@ ) {
