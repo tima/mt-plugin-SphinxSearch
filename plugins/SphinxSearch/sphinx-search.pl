@@ -229,10 +229,11 @@ sub init_sphinxable {
     MT::Comment->sphinx_init(
         select_values => { visible => 1 },
         group_columns => [ 'entry_id', 'commenter_id' ],
+        stash   => 'comments',
         mva           => {
             response_to => {
                 query =>
-'select distinct mt_comment.comment_id, response_to.comment_commenter_id from mt_comment, mt_comment as response_to where mt_comment.comment_entry_id = response_to.comment_entry_id and mt_comment.comment_created_on > response_to.comment_created_on and response_to.comment_commenter_id != NULL',
+'select distinct mt_comment.comment_id, response_to.comment_commenter_id from mt_comment, mt_comment as response_to where mt_comment.comment_entry_id = response_to.comment_entry_id and mt_comment.comment_created_on > response_to.comment_created_on and response_to.comment_commenter_id is not null',
                 to     => 'MT::Author',
                 lookup => 'name',
                 stash  => [ 'author', 'authors' ],
