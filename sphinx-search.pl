@@ -235,6 +235,7 @@ sub init_sphinxable {
 'select distinct mt_comment.comment_id, response_to.comment_commenter_id from mt_comment, mt_comment as response_to where mt_comment.comment_entry_id = response_to.comment_entry_id and mt_comment.comment_created_on > response_to.comment_created_on and response_to.comment_commenter_id != NULL',
                 to     => 'MT::Author',
                 lookup => 'name',
+                stash  => [ 'author', 'authors' ],
             }
         }
     );
