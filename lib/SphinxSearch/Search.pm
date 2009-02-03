@@ -115,9 +115,8 @@ sub _get_sphinx_results {
     @classes =
       ( delete $classes{'MT::Entry'} ? ('MT::Entry') : (), keys %classes );
 
-    my $index          = $app->param('index') || 'entry';
-    my $class          = $indexes{$index}->{class};
-    my $search_keyword = $app->{search_string};
+    my $index = $app->param('index') || 'entry';
+    my $class = $indexes{$index}->{class};
 
     my $sort_mode       = {};
     my $sort_mode_param = $app->param('sort_mode') || 'descend';
@@ -265,7 +264,7 @@ sub _get_sphinx_results {
 
     require SphinxSearch::Sphinxable;
     my $results = SphinxSearch::Sphinxable->sphinx_search(
-        \@classes, $search_keyword,
+        \@classes, $app->{search_string},
         Indexes      => \@indexes,
         Filters      => $filters,
         RangeFilters => $range_filters,
