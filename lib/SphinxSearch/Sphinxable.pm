@@ -59,7 +59,6 @@ sub sphinx_search {
 
     # I'm sure there's a better way to do this bit
     # but it's working for now
-    my $class;
     my $datasource;
     
     require SphinxSearch::Index;

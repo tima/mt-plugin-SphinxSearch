@@ -54,6 +54,7 @@ $plugin->set_config_value ('db_host', $db_host, 'system') if ($db_host);
 $plugin->set_config_value ('db_user', $db_user, 'system') if ($db_user);
 $plugin->set_config_value ('db_pass', $db_pass, 'system') if ($db_pass);
     
-my $tmpl = $plugin->_gen_sphinx_conf_tmpl;
+require SphinxSearch::Config;
+my $tmpl = SphinxSearch::Config->_gen_sphinx_conf_tmpl;
 my $str = $tmpl->output;
 print "$str\n";
