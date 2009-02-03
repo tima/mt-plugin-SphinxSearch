@@ -236,6 +236,13 @@ sub init_sphinxable {
                 to     => 'MT::Author',
                 lookup => 'name',
                 stash  => [ 'author', 'authors' ],
+            },
+            entry_basename   => {
+                to  => 'MT::Entry',
+                lookup  => 'basename',
+                stash   => [ 'entry', 'entries' ],
+                with    => 'MT::Comment',
+                by      => [ 'id', 'entry_id' ],
             }
         }
     );
