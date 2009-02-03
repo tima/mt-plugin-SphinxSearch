@@ -440,64 +440,64 @@ sub author {
     }
 }
 
-sub comment {
-    my ( $cb, $app, $filters, $range_filters, $stash, $vars ) = @_;
-    if ($app->param ('response_comments')) {
-        my $author = $stash->{author};
-        delete $filters->{author_id};
-        
-        require MT::Entry;
-        require MT::Comment;
-        my $entry_iter = MT::Entry->load_iter({ ( $blog_id ? ( blog_id => $blog_id ) : () ) }, {
-            join => MT::Comment->join_on('entry_id', {
-                ( $blog_id ? ( blog_id => $blog_id ) : () ),
-                commenter_id => $author_id,
-                visible => 1,
-            }, { unique => 1 }),
-            'sort' => 'created_on',
-            direction => 'descend',
-        });
-        
-        my @threads;
-        while (my $entry = $entry_iter->()) {
-            my $first_post = MT::Comment->load({
-                entry_id => $entry->id,
-                commenter_id => $author_id,
-            }, {
-                'sort' => 'created_on',
-                direction => 'ascend',
-                limit => 1,
-            });
-            my $comment_iter = MT::Comment->load_iter({
-                entry_id => $entry->id,
-                created_on => [
-                    $first_post->created_on,
-                    undef,
-                ],
-                id => [ $first_post->id, undef ],
-                commenter_id => $author_id,
-                visible => 1,
-            }, {
-                # Only consider comments with a creation date
-                # following the date of the first comment by
-                # author in context.
-                range_incl => { created_on => 1 },
-                # Select only comments _following_ the first comment
-                # by the author in context.
-                range => { id => 1 },
-                # Skip replies by author in context.
-                not => { commenter_id => 1 },
-                'sort' => 'created_on',
-                direction => 'descend',
-                no_cached_prepare => 1,
-            });
-            # push @threads, "(\@entry_id " . $entry->id . " @created_on)"
-            push @threads, $comment_iter if $comment_iter;
-        }
-        
-    }
-}
-
+# sub comment {
+#     my ( $cb, $app, $filters, $range_filters, $stash, $vars ) = @_;
+#     if ($app->param ('response_comments')) {
+#         my $author = $stash->{author};
+#         delete $filters->{author_id};
+#         
+#         require MT::Entry;
+#         require MT::Comment;
+#         my $entry_iter = MT::Entry->load_iter({ ( $blog_id ? ( blog_id => $blog_id ) : () ) }, {
+#             join => MT::Comment->join_on('entry_id', {
+#                 ( $blog_id ? ( blog_id => $blog_id ) : () ),
+#                 commenter_id => $author_id,
+#                 visible => 1,
+#             }, { unique => 1 }),
+#             'sort' => 'created_on',
+#             direction => 'descend',
+#         });
+#         
+#         my @threads;
+#         while (my $entry = $entry_iter->()) {
+#             my $first_post = MT::Comment->load({
+#                 entry_id => $entry->id,
+#                 commenter_id => $author_id,
+#             }, {
+#                 'sort' => 'created_on',
+#                 direction => 'ascend',
+#                 limit => 1,
+#             });
+#             my $comment_iter = MT::Comment->load_iter({
+#                 entry_id => $entry->id,
+#                 created_on => [
+#                     $first_post->created_on,
+#                     undef,
+#                 ],
+#                 id => [ $first_post->id, undef ],
+#                 commenter_id => $author_id,
+#                 visible => 1,
+#             }, {
+#                 # Only consider comments with a creation date
+#                 # following the date of the first comment by
+#                 # author in context.
+#                 range_incl => { created_on => 1 },
+#                 # Select only comments _following_ the first comment
+#                 # by the author in context.
+#                 range => { id => 1 },
+#                 # Skip replies by author in context.
+#                 not => { commenter_id => 1 },
+#                 'sort' => 'created_on',
+#                 direction => 'descend',
+#                 no_cached_prepare => 1,
+#             });
+#             # push @threads, "(\@entry_id " . $entry->id . " @created_on)"
+#             push @threads, $comment_iter if $comment_iter;
+#         }
+#         
+#     }
+# }
+# 
 sub _sphinx_search_context_init {
     my $ctx = shift;
 
