@@ -421,7 +421,7 @@ sub author {
         $author = [ split( /\s*,\s*/, $author ) ];
     }
     my @authors = MT::Author->load( { name => $author } );
-    $author = shift @authors;
+    $author = $authors[0];
     if ( $author && !$app->param('following_data') ) {
         $filters->{author_id} = [ map { $_->id } @authors ];
         $stash->{author} = $author;
