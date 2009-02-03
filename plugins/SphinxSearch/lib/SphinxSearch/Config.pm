@@ -112,22 +112,26 @@ sub _gen_sphinx_conf_tmpl {
                 my $cur_mva = $index_hash->{mva}->{$mva};
                 my $mva_query;
                 if ( ref($cur_mva) ) {
-                    my $mva_source = $cur_mva->{with}->datasource;
-                    $mva_query = "SELECT "
-                      . join( ', ',
-                        map { "${mva_source}_$_" } @{ $cur_mva->{by} } )
-                      . " from mt_"
-                      . $mva_source;
-                    if ( my $sel_values = $cur_mva->{select_values} ) {
-                        $mva_query .= " WHERE " . join(
-                            " AND ",
-                            map {
-                                "${mva_source}_$_ = \""
-                                  . $sel_values->{$_} . "\""
-                              } keys %$sel_values
-                        );
+                    if (!$cur_mva->{query}) {
+                        my $mva_source = $cur_mva->{with}->datasource;
+                        $mva_query = "SELECT "
+                          . join( ', ',
+                            map { "${mva_source}_$_" } @{ $cur_mva->{by} } )
+                          . " from mt_"
+                          . $mva_source;
+                        if ( my $sel_values = $cur_mva->{select_values} ) {
+                            $mva_query .= " WHERE " . join(
+                                " AND ",
+                                map {
+                                    "${mva_source}_$_ = \""
+                                      . $sel_values->{$_} . "\""
+                                  } keys %$sel_values
+                            );
+                        }                        
                     }
-
+                    else {
+                        $mva_query = $cur_mva->{query};
+                    }
                 }
                 else {
                     $mva_query = $cur_mva;
