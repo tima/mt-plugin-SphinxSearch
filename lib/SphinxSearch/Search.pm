@@ -44,8 +44,8 @@ sub init_app {
             require SphinxSearch::Util;
             my $results = _get_sphinx_results( $_[0] );
             return $_[0]->error( "Error querying searchd: "
-                  . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr ) )
-              unless ( $results && $results->{result_objs} );
+                  . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr )
+            ) unless ( $results && $results->{result_objs} );
             my @results = ( @{ $results->{result_objs} } );
             return ( $results->{query_results}->{total},
                 sub { shift @results } );
@@ -414,19 +414,17 @@ sub date {
 sub author {
     my ( $cb, $app, $filters, $range_filters, $stash, $vars ) = @_;
     my $author = $app->param('author') || $app->param('username');
+
+    # if there's a comma, split 'em
+    require MT::Author;
+    if ( $author =~ /,/ ) {
+        $author = [ split( /\s*,\s*/, $author ) ];
+    }
     my @authors = MT::Author->load( { name => $author } );
     $author = shift @authors;
     if ( $author && !$app->param('following_data') ) {
-        require MT::Author;
-
-        # if there's a comma, split 'em
-        if ( $author =~ /,/ ) {
-            $author = [ split( /\s*,\s*/, $author ) ];
-        }
-        if (@authors) {
-            $filters->{author_id} = [ map { $_->id } @authors ];
-            $stash->{author} = shift @authors;
-        }
+        $filters->{author_id} = [ map { $_->id } @authors ];
+        $stash->{author} = $author;
     }
     elsif ($author) {
         eval { require MT::Community::Friending };
@@ -445,7 +443,7 @@ sub author {
 #     if ($app->param ('response_comments')) {
 #         my $author = $stash->{author};
 #         delete $filters->{author_id};
-#         
+#
 #         require MT::Entry;
 #         require MT::Comment;
 #         my $entry_iter = MT::Entry->load_iter({ ( $blog_id ? ( blog_id => $blog_id ) : () ) }, {
@@ -457,7 +455,7 @@ sub author {
 #             'sort' => 'created_on',
 #             direction => 'descend',
 #         });
-#         
+#
 #         my @threads;
 #         while (my $entry = $entry_iter->()) {
 #             my $first_post = MT::Comment->load({
@@ -494,10 +492,10 @@ sub author {
 #             # push @threads, "(\@entry_id " . $entry->id . " @created_on)"
 #             push @threads, $comment_iter if $comment_iter;
 #         }
-#         
+#
 #     }
 # }
-# 
+#
 sub _sphinx_search_context_init {
     my $ctx = shift;
 
