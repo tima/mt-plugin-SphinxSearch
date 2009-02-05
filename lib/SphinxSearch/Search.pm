@@ -421,7 +421,7 @@ sub author {
 
     # if there's a comma, split 'em
     require MT::Author;
-    if ( $author =~ /,/ ) {
+    if ( $author && $author =~ /,/ ) {
         $author = [ split( /\s*,\s*/, $author ) ];
     }
     my @authors = MT::Author->load( { name => $author } );
