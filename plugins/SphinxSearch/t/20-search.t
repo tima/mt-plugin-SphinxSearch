@@ -15,4 +15,8 @@ my $tmpl = MT::Template->get_by_key ({ blog_id => 0, identifier => 'search_resul
 $tmpl->text ('Search Results!!! Error = <mt:var name="error">.');
 $tmpl->save or die $tmpl->errstr;
 
+# gotta make sure we go somewhere funny, in case sphinx *is* running
+my $p = MT->component ('sphinxsearch');
+$p->set_config_value ('searchd_port', '9999', 'system');
+
 out_like ('MT::App::Search', { search => 'stuff' }, qr/Error querying searchd: received zero-sized searchd response/, "When searchd isn't available, return a useful error");
