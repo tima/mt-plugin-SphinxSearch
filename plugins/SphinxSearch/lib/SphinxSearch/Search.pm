@@ -342,11 +342,14 @@ sub tag {
     # and nix the search keyword
     if ( $app->mode eq 'tag' ) {
         require MT::Tag;
-        my $tags      = delete $app->{search_string};
+        my $tags = delete $app->{search_string};
+        require MT::Util;
+        $stash->{search_string} = MT::Util::encode_html($tags);
         my @tag_names = MT::Tag->split( ',', $tags );
-        my %tags      = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
-        my @tags      = MT::Tag->load( { name => [ keys %tags ] } );
+        my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
+        my @tags = MT::Tag->load( { name => [ keys %tags ] } );
         my @tag_ids;
+
         foreach (@tags) {
             push @tag_ids, $_->id;
             my @more =
