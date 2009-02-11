@@ -19,7 +19,6 @@ my $db_pass;
 
 sub options {
     return (
-        'mt_dir=s'    => \$mt_dir,
         'verbose+'    => \$verbose,
         'bin_path=s'  => \$bin_path,
         'file_path=s' => \$file_path,
