@@ -217,6 +217,7 @@ sub init_sphinxable {
     MT::Entry->sphinx_init(
         select_values => { status => MT::Entry::RELEASE() },
         group_columns => ['author_id'],
+        include_meta    => 1,
         mva           => {
             category => {
                 to   => 'MT::Category',
@@ -230,6 +231,7 @@ sub init_sphinxable {
         select_values => { visible => 1 },
         group_columns => [ 'entry_id', 'commenter_id' ],
         stash   => 'comments',
+        include_meta    => 1,
         mva           => {
             response_to => {
                 query =>

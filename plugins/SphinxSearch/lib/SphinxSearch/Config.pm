@@ -38,7 +38,7 @@ sub _gen_sphinx_conf_tmpl {
         { group => ['blog_id'] } );
     my $entry_count;
     push @num_entries, $entry_count while ( ($entry_count) = $iter->() );
-    my $max_entries = int( 1.5 * max @num_entries );
+    my $max_entries = scalar @num_entries ? int( 1.5 * max @num_entries ) : 0;
     $params{max_matches} = $max_entries > 1000 ? $max_entries : 1000;
 
     my %info_query;
