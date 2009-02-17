@@ -3,6 +3,10 @@ package SphinxSearch::Util;
 
 my $spx;
 
+sub _reset_sphinx {
+    undef $spx;
+}
+
 sub _get_sphinx {
     require Sphinx;
     return $spx if $spx;

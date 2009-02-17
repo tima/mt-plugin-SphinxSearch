@@ -65,6 +65,11 @@ sub init_app {
 
 }
 
+sub init_request {
+    require SphinxSearch::Util;
+    SphinxSearch::Util::_reset_sphinx();
+}
+
 sub straight_sphinx_search {
     my $app = shift;
 
