@@ -76,6 +76,7 @@ sub init_registry {
                       '$SphinxSearch::SphinxSearch::Search::date',
                     'sphinx_search.author' =>
                       '$SphinxSearch::SphinxSearch::Search::author',
+                    'init_request' => '$SphinxSearch::Search::init_request',
                 }
             }
         },
@@ -217,7 +218,7 @@ sub init_sphinxable {
     MT::Entry->sphinx_init(
         select_values => { status => MT::Entry::RELEASE() },
         group_columns => ['author_id'],
-        include_meta    => 1,
+        include_meta  => 1,
         mva           => {
             category => {
                 to   => 'MT::Category',
@@ -230,8 +231,8 @@ sub init_sphinxable {
     MT::Comment->sphinx_init(
         select_values => { visible => 1 },
         group_columns => [ 'entry_id', 'commenter_id' ],
-        stash   => 'comments',
-        include_meta    => 1,
+        stash         => 'comments',
+        include_meta  => 1,
         mva           => {
             response_to => {
                 query =>
@@ -240,12 +241,12 @@ sub init_sphinxable {
                 lookup => 'name',
                 stash  => [ 'author', 'authors' ],
             },
-            entry_basename   => {
-                to  => 'MT::Entry',
-                lookup  => 'basename',
-                stash   => [ 'entry', 'entries' ],
-                with    => 'MT::Comment',
-                by      => [ 'id', 'entry_id' ],
+            entry_basename => {
+                to     => 'MT::Entry',
+                lookup => 'basename',
+                stash  => [ 'entry', 'entries' ],
+                with   => 'MT::Comment',
+                by     => [ 'id', 'entry_id' ],
             }
         }
     );
