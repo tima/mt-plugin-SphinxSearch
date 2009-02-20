@@ -77,5 +77,3 @@ $pd->data ({ use_indexer_tasks => 1 });
 $plugin->sphinx_indexer_task ('main');
 
 is (MT::TheSchwartz::Job->count, 1, "One job was added");
-
-print SphinxSearch::Config->_gen_sphinx_conf_tmpl->output;
