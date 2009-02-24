@@ -29,7 +29,7 @@ $p->set_config_value( 'searchd_port', '9999', 'system' );
 out_like(
     'MT::App::Search',
     { search => 'stuff' },
-    qr/Error querying searchd: received zero-sized searchd response/,
+    qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection refused\E/,
     "When searchd isn't available, return a useful error"
 );
 
@@ -38,9 +38,9 @@ out_like(
 
     # temp. nix the sphinx searching,
     # since we're not testing that part of the plugin
-    require Sphinx;
-    my $orig_exec = \&Sphinx::Query;
-    *Sphinx::Query = sub {
+    require Sphinx::Search;
+    my $orig_exec = \&Sphinx::Search::Query;
+    *Sphinx::Search::Query = sub {
         require MT::Entry;
         my @entries = MT::Entry->load( { status => MT::Entry::RELEASE() } );
         return {
