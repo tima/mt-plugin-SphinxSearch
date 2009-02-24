@@ -7,7 +7,6 @@ use warnings;
 use base qw( MT::Plugin );
 
 use MT;
-use Sphinx;
 use File::Spec;
 use POSIX;
 

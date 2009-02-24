@@ -4,6 +4,8 @@ package SphinxSearch::Sphinxable;
 use strict;
 use warnings;
 
+use Sphinx::Search;
+
 use MT::Util qw( encode_xml );
 
 # sub sphinx_header {
@@ -108,35 +110,35 @@ sub sphinx_search {
 
     if ( exists $params{Sort} ) {
         exists $params{Sort}->{Ascend}
-          ? $spx->SetSortMode( Sphinx::SPH_SORT_ATTR_ASC,
+          ? $spx->SetSortMode( SPH_SORT_ATTR_ASC,
             $params{Sort}->{Ascend} )
           : exists $params{Sort}->{Descend}
-          ? $spx->SetSortMode( Sphinx::SPH_SORT_ATTR_DESC,
+          ? $spx->SetSortMode( SPH_SORT_ATTR_DESC,
             $params{Sort}->{Descend} )
           : exists $params{Sort}->{Segments}
-          ? $spx->SetSortMode( Sphinx::SPH_SORT_TIME_SEGMENTS,
+          ? $spx->SetSortMode( SPH_SORT_TIME_SEGMENTS,
             $params{Sort}->{Segments} )
           : exists $params{Sort}->{Extended}
-          ? $spx->SetSortMode( Sphinx::SPH_SORT_EXTENDED,
+          ? $spx->SetSortMode( SPH_SORT_EXTENDED,
             $params{Sort}->{Extended} )
-          : $spx->SetSortMode(Sphinx::SPH_SORT_RELEVANCE);
+          : $spx->SetSortMode(SPH_SORT_RELEVANCE);
     }
     else {
 
         # Default to explicitly setting the sort mode to relevance
-        $spx->SetSortMode(Sphinx::SPH_SORT_RELEVANCE);
+        $spx->SetSortMode(SPH_SORT_RELEVANCE);
     }
 
     if ( exists $params{Match} ) {
         my $match = $params{Match};
-        $match eq 'extended' ? $spx->SetMatchMode(Sphinx::SPH_MATCH_EXTENDED)
-          : $match eq 'boolean' ? $spx->SetMatchMode(Sphinx::SPH_MATCH_BOOLEAN)
-          : $match eq 'phrase'  ? $spx->SetMatchMode(Sphinx::SPH_MATCH_PHRASE)
-          : $match eq 'any'     ? $spx->SetMatchMode(Sphinx::SPH_MATCH_ANY)
-          :                       $spx->SetMatchMode(Sphinx::SPH_MATCH_ALL);
+        $match eq 'extended' ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
+          : $match eq 'boolean' ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
+          : $match eq 'phrase'  ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
+          : $match eq 'any'     ? $spx->SetMatchMode(SPH_MATCH_ANY)
+          :                       $spx->SetMatchMode(SPH_MATCH_ALL);
     }
     else {
-        $spx->SetMatchMode(Sphinx::SPH_MATCH_ALL);
+        $spx->SetMatchMode(SPH_MATCH_ALL);
     }
 
     my $offset = 0;

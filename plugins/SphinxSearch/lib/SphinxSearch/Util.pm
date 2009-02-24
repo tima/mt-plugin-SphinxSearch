@@ -1,6 +1,11 @@
 
 package SphinxSearch::Util;
 
+use strict;
+use warnings;
+
+use Sphinx::Search;
+
 use MT::Request;
 # my $spx;
 
@@ -10,9 +15,9 @@ sub _reset_sphinx {
 
 sub _get_sphinx {
     my $spx = MT::Request->instance->stash ('sphinx_obj');
-    require Sphinx;
+    require Sphinx::Search;
     return $spx if $spx;
-    $spx = Sphinx->new;
+    $spx = Sphinx::Search->new;
     require MT;
     my $plugin = MT->component('sphinxsearch');
     $spx->SetServer(
