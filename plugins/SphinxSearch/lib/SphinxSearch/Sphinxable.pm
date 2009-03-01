@@ -178,9 +178,11 @@ sub sphinx_search {
     my @result_objs = ();
     my $meth        = $indexes{$datasource}->{id_to_obj}
       or die "No id_to_obj method for $datasource";
+    my $i = 0;
     foreach my $match ( @{ $results->{matches} } ) {
         my $id = $match->{doc};
         my $o = $meth->($id) or next;
+        $o->{__sphinx_result_index} = sprintf ("%04d", $i++);
         push @result_objs, $o;
     }
 
