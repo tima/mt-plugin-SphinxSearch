@@ -1,0 +1,327 @@
+<TMPL_LOOP NAME=SOURCE_LOOP>
+source <TMPL_VAR NAME=INDEX>_source
+{
+    type                = mysql
+	sql_host			= <TMPL_VAR NAME=DB_HOST>
+	sql_user			= <TMPL_VAR NAME=DB_USER>
+	sql_pass			= <TMPL_VAR NAME=DB_PASS>
+	sql_db				= <TMPL_VAR NAME=DB_DB>
+	sql_port			= 3306				# optional, default is 3306
+
+    sql_query           = <TMPL_VAR NAME=QUERY>
+
+<TMPL_IF NAME=GROUP_LOOP>
+<TMPL_LOOP NAME=GROUP_LOOP>
+    sql_attr_uint       = <TMPL_VAR NAME=GROUP_COLUMN>
+</TMPL_LOOP>
+</TMPL_IF>
+<TMPL_IF NAME=STRING_GROUP_LOOP>
+<TMPL_LOOP NAME=STRING_GROUP_LOOP>
+    sql_attr_uint       = <TMPL_VAR NAME=STRING_GROUP_COLUMN>_crc32
+</TMPL_LOOP>
+</TMPL_IF>
+<TMPL_IF NAME=DATE_LOOP>
+<TMPL_LOOP NAME=DATE_LOOP>
+    sql_attr_timestamp  = <TMPL_VAR NAME=DATE_COLUMN>
+</TMPL_LOOP>
+</TMPL_IF>
+<TMPL_IF NAME=MVA_LOOP>
+<TMPL_LOOP NAME=MVA_LOOP>
+    sql_attr_multi      = uint <TMPL_VAR NAME=MVA_NAME> from query; <TMPL_VAR NAME=MVA_QUERY>
+</TMPL_LOOP>
+</TMPL_IF>
+    sql_query_info      = <TMPL_VAR NAME=INFO_QUERY>
+    
+}
+
+index <TMPL_VAR NAME=INDEX>_index
+{
+    html_strip          = 1
+	html_index_attrs	= img=alt,title; a=title;
+	source			    = <TMPL_VAR NAME=INDEX>_source
+	path			    = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_index
+	morphology		    = <TMPL_VAR NAME=MORPHOLOGY>
+}
+
+<TMPL_IF NAME=DELTA_QUERY>
+source <TMPL_VAR NAME=INDEX>_delta_source : <TMPL_VAR NAME=INDEX>_source
+{
+<TMPL_IF NAME=DELTA_PRE_QUERY>    sql_query_pre = <TMPL_VAR NAME=DELTA_PRE_QUERY></TMPL_IF>
+    sql_query       = <TMPL_VAR NAME=DELTA_QUERY>
+}
+
+index <TMPL_VAR NAME=INDEX>_delta_index : <TMPL_VAR NAME=INDEX>_index
+{
+    source          = <TMPL_VAR NAME=INDEX>_delta_source
+    path            = <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_delta_index
+}
+</TMPL_IF>
+
+</TMPL_LOOP>
+<TMPL_UNLESS NAME=SOURCE_LOOP>
+#
+# sphinx configuration file sample
+#
+
+#############################################################################
+## data source definition
+#############################################################################
+
+source entry_source
+{
+	type		= mysql
+	strip_html	= 0
+	index_html_attrs	=
+	sql_host			= <TMPL_VAR NAME=DB_HOST>
+	sql_user			= <TMPL_VAR NAME=DB_USER>
+	sql_pass			= <TMPL_VAR NAME=DB_PASS>
+	sql_db				= <TMPL_VAR NAME=DB_DB>
+	# sql_sock			= /tmp/mysql.sock	# optional,
+										# usually '/var/lib/mysql/mysql.sock' on Linux,
+										# usually '/tmp/mysql.sock' on FreeBSD
+	sql_port			= 3306				# optional, default is 3306
+
+	sql_query			= \
+		SELECT entry_id, entry_blog_id, UNIX_TIMESTAMP(entry_created_on) AS entry_created_on, entry_title, entry_text, entry_text_more, author_name, author_nickname \
+		FROM mt_entry, mt_author \
+		WHERE entry_status = 2 \
+		  AND entry_author_id = author_id
+
+	sql_group_column	= entry_blog_id
+	sql_date_column		= entry_created_on
+
+	sql_query_info		= SELECT * FROM mt_entry WHERE entry_id=$id
+
+}
+
+index entry_index
+{
+	source			= entry_index
+	#path			= /var/data/test1
+	path			= /tmp/entry_index
+}
+
+source comment_source
+{
+	type		= mysql
+	strip_html	= 0
+	index_html_attrs	=
+	sql_host			= <TMPL_VAR NAME=DB_HOST>
+	sql_user			= <TMPL_VAR NAME=DB_USER>
+	sql_pass			= <TMPL_VAR NAME=DB_PASS>
+	sql_db				= <TMPL_VAR NAME=DB_DB>
+	# sql_sock			= /tmp/mysql.sock	# optional,
+										# usually '/var/lib/mysql/mysql.sock' on Linux,
+										# usually '/tmp/mysql.sock' on FreeBSD
+	sql_port			= 3306				# optional, default is 3306
+
+	sql_query			= \
+		SELECT comment_id, comment_blog_id, UNIX_TIMESTAMP(comment_created_on) AS comment_created_on, comment_text, comment_author \
+		FROM mt_comment \
+		WHERE comment_visible = 1
+
+	sql_group_column	= comment_blog_id
+	sql_date_column		= comment_created_on
+
+	sql_query_info		= SELECT * FROM mt_comment WHERE comment_id=$id
+
+}
+
+index comment_index
+{
+	source			= comment_source
+	#path			= /var/data/test1
+	path			= /tmp/comment_index
+}
+
+#############################################################################
+## index definition
+#############################################################################
+
+# local index example
+#
+# this is an index which is stored locally in the filesystem
+# all indexing-time options (such as morphology and charsets) belong to the index
+#index test1
+#{
+	# which document source to index
+	# at least one MUST be defined
+	#
+	# multiple sources may be specified; to do so, just add more
+	# "source = NAME" lines. in this case, ALL the document IDs
+	# in ALL the specified sources MUST be unique
+#	source			= src1
+
+	# this is path and index file name without extension
+	# files <indexpath>.spi/spd/spr will be created by indexer
+	#
+	# .spr is temporary raw log, it can be removed when indexer is done
+	# .spi/.spd are fulltext index files (index index and index data)
+	#
+	# MUST be defined
+#	path			= /var/data/test1
+	# path			= /var/data/test1
+
+	# morphology
+	# default is not to use any
+	#
+	# currently supported morphology preprocessors are Porter stemmers
+	# for English and Russian, and Soundex. more stemmers could be added
+	# at users request.
+	#
+	# morphology		= none
+	# morphology		= stem_en
+	# morphology		= stem_ru
+	# morphology		= stem_enru
+	# morphology		= soundex
+#	morphology			= none
+
+	# stopwords file
+	# format is plain text in whatever encoding you use
+	# optional, default is empty
+	#
+	# stopwords			= /var/data/stopwords.txt
+#	stopwords			=
+
+	# minimum word length
+	# only the words that are of this length and above will be indexed;
+	# for example, if min_word_len is 4, "the" won't be indexed, but "they" will be.
+	# default is 1, which (obviously) means to index everything
+#	min_word_len		= 1
+
+	# charset encoding type
+	# known types are 'sbcs' (Single Byte CharSet) and 'utf-8'
+	# optional, default is sbcs
+#	charset_type		= sbcs
+
+	# charset definition and case folding rules "table"
+	# optional, default value depends on charset_type
+	# for now, defaults are configured to support English and Russian
+	# this behavior MAY change in future versions
+	#
+	# 'sbcs' default value is
+	# charset_table		= 0..9, A..Z->a..z, _, a..z, U+A8->U+B8, U+B8, U+C0..U+DF->U+E0..U+FF, U+E0..U+FF
+	#
+	# 'utf-8' default value is
+	# charset_table		= 0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F
+#}
+
+
+# inherited index example
+#
+# all the parameters are copied from the parent index,
+# and may then be overridden in this index definition
+#index test1stemmed : test1
+#{
+#	path			= /var/data/test1stemmed
+#	morphology		= stem_en
+#}
+
+
+# distributed index example
+#
+# this is a virtual index which can NOT be directly indexed,
+# and only containts references to other local and/or remote indexes
+#
+# if searchd receives a query against this index,
+# it does the following:
+#
+# 1) connects to all the specified remote agents,
+# 2) issues the query,
+# 3) searches local indexes (while the remote agents are searching),
+# 4) collects remote search results,
+# 5) merges all the results together (removing the duplicates),
+# 6) sends the merged resuls to client.
+#
+# this index type is primarily intenteded to be able to split huge (100GB+)
+# datasets into chunks placed on different physical servers and them search
+# through those chunks in parallel, reducing response times and server load;
+# it seems, however, that it could also be used to take advantage of
+# multi-processor systems or to implement HA (high-availability) search.
+#index dist1
+#{
+	# 'distributed' index type MUST be specified
+#	type				= distributed
+
+	# local index to be searched
+	# there can be many local indexes configured
+#	local				= test1
+#	local				= test1stemmed
+
+	# remote agent
+	# multiple remote agents may be specified
+	# syntax is 'hostname:port:index1,[index2[,...]]
+#	agent				= localhost:3313:remote1
+#	agent				= localhost:3314:remote2,remote3
+
+	# remote agent connection timeout, milliseconds
+	# optional, default is 1000 ms, ie. 1 sec
+#	agent_connect_timeout	= 1000
+
+	# remote agent query timeout, milliseconds
+	# optional, default is 3000 ms, ie. 3 sec
+#	agent_query_timeout		= 3000
+#}
+
+</TMPL_UNLESS>
+#############################################################################
+## indexer settings
+#############################################################################
+
+indexer
+{
+	# memory limit
+	# can be specified in bytes, kilobytes (mem_limit=1000K) or megabytes (mem_limit=10M)
+	# will grow if set unacceptably low
+	# will warn if set too low, hurting the performance
+	# optional, default is 32M
+	mem_limit			= 32M
+}
+
+#############################################################################
+## searchd settings
+#############################################################################
+
+searchd
+{
+	# port on which search daemon will listen
+	port				= <TMPL_VAR NAME=SEARCHD_PORT>
+
+
+	# log file
+	# searchd run info is logged here
+	log					= <TMPL_VAR NAME=FILE_PATH>/searchd.log
+
+
+	# query log file
+	# all the search queries are logged here
+	query_log			= <TMPL_VAR NAME=FILE_PATH>/query.log
+
+
+	# client read timeout, seconds
+	read_timeout		= 5
+
+
+	# maximum amount of children to fork
+	# useful to control server load
+	max_children		= 30
+
+
+	# a file which will contain searchd process ID
+	# used for different external automation scripts
+	# MUST be present
+	pid_file			= <TMPL_VAR NAME=PID_PATH>
+
+
+	# maximum amount of matches this daemon would retrieve from each index
+	# and serve to client
+	#
+	# this parameter affects per-client memory usage slightly (16 bytes per match)
+	# and CPU usage in match sorting phase; so blindly raising it to 1 million
+	# is definitely NOT recommended
+	#
+	# default is 1000 (just like with Google)
+	max_matches			= <TMPL_VAR NAME=MAX_MATCHES>
+}
+
+# --eof--
