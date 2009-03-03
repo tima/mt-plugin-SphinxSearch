@@ -61,6 +61,7 @@
     <div class="field"><input type="text" name="searchd_port" id="searchd_port" value="<TMPL_VAR NAME=SEARCHD_PORT>" /></div>
 </div>
 
+<mt:if name='sphinx_conf_type' ne="xml">
 <div class="setting grouped">
     <div class="label"><label for="db_host">Alternate DB Host:</label></div>
     <div class="field"><input type="text" name="db_host" id="db_host" value="<TMPL_VAR NAME=DB_HOST>" /></div>
@@ -75,6 +76,7 @@
     <div class="label"><label for="db_pass">Alternate DB Password:</label></div>
     <div class="field"><input type="text" name="db_pass" id="db_pass" value="<TMPL_VAR NAME=DB_PASS>" /></div>
 </div>
+</mt:if>
 
 <mtapp:setting
     id="use_indexer_tasks"
@@ -83,5 +85,14 @@
     show_hint="1">
     <input type='checkbox' class='cb' name='use_indexer_tasks' id='use_indexer_tasks'<mt:if name='use_indexer_tasks'> checked="checked"</mt:if> />
 </mtapp:setting>
+
+<mtapp:setting
+    id="sphinx_conf_type"
+    label="Use xpipe2"
+    hint="Uses xpipe2 format to store and retrieve config and data for indexing"
+    show_hint="1">
+    <input type='checkbox' class='cb' name='sphinx_conf_type' value='xml' id='sphinx_conf_type'<mt:if name='sphinx_conf_type' eq="xml"> checked="checked"</mt:if> />
+</mtapp:setting>
+
 
 <p><a href="<TMPL_VAR NAME=SCRIPT_URI>?__mode=gen_sphinx_conf">Generate sphinx.conf file from MT settings</a></p>

@@ -238,6 +238,7 @@ sub _get_source_config {
                 my $mva_query;
                 if ( ref($cur_mva) ) {
                     if (!$cur_mva->{query}) {
+						eval("use ".$cur_mva->{with});
                         my $mva_source = $cur_mva->{with}->datasource;
                         $mva_query = "SELECT "
                           . join( ', ',
@@ -384,11 +385,12 @@ sub _gen_sphinx_conf_tmpl {
 sub gen_sphinx_conf {
     my $app	= shift;
 	my $q = $app->{query};
-	my $conf_type = $q->param ('type') || 'db';
 
     my $plugin = MT->component('sphinxsearch');
 
+	my $conf_type = $q->param ('type') || $plugin->get_config_value( 'sphinx_conf_type', 'system' );
     $plugin->set_config_value( 'sphinx_conf_type', $conf_type, 'system' );
+
     my $tmpl   = &_gen_sphinx_conf_tmpl;
 
     my $str = $app->build_page($tmpl);

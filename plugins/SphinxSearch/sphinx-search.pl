@@ -38,6 +38,7 @@ $plugin  = MT::Plugin::SphinxSearch->new(
                 [ 'db_user', 			{ Default => undef, Scope => 'system' } ],
                 [ 'db_pass', 			{ Default => undef, Scope => 'system' } ],
                 [ 'use_indexer_tasks', 	{ Default => 1, Scope => 'system' } ],
+                [ 'sphinx_conf_type',	{ Default => undef, Scope => 'system' } ],
                 [ 'min_word_len', 		{ Default => 1, Scope => 'system' } ],
                 [ 'charset_type', 		{ Default => 'utf-8', Scope => 'system' } ],
             ]
@@ -244,11 +245,6 @@ sub init_sphinxable {
             }
         }
     );
-    MT::Author->sphinx_init(
-        select_values => { status => MT::Author::APPROVED() },
-        include_meta  => 1,
-		exclude_columns => [ 'api_password', 'hint', 'password', 'public_key', 'remote_auth_token' ]
-    );
 }
 
 sub init_apps {
@@ -287,7 +283,8 @@ sub start_indexer {
     my $sphinx_path = $plugin->get_config_value( 'sphinx_path', 'system' )
       or return $plugin->error("Sphinx path is not set");
 
-    my @indexes = $plugin->which_indexes( Indexer => $indexes );
+    require SphinxSearch::Index;
+    my @indexes = SphinxSearch::Index->which_indexes( Indexer => $indexes );
 
     return $plugin->error("No indexes to rebuild") if ( !@indexes );
 
@@ -296,6 +293,7 @@ sub start_indexer {
     my $indexer_binary = File::Spec->catfile( $sphinx_path, 'indexer' );
     my $cmd = "$indexer_binary --quiet --config $sphinx_conf --rotate "
       . join( ' ', @indexes );
+
     $plugin->run_cmd($cmd);
 }
 

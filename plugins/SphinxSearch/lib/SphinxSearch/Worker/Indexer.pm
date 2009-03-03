@@ -21,8 +21,8 @@ sub work {
     
     return if (!@jobs);
 
-    my $plugin = MT->component ('SphinxSearch');   
-    if ( !$plugin->check_searchd ) {
+    my $plugin = MT->component ('SphinxSearch'); 
+    if ( !$plugin->check_searchd && $plugin->errstr !~ /no valid indexes to serve/gi ) {
         $_->failed ("Error starting searchd: " . $plugin->errstr) foreach (@jobs);
     }
     else {
