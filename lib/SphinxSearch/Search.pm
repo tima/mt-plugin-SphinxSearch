@@ -273,7 +273,7 @@ sub _get_sphinx_results {
 
     require SphinxSearch::Sphinxable;
     my $results = SphinxSearch::Sphinxable->sphinx_search(
-        \@classes, $app->{search_string},
+        \@classes, delete $app->{search_string},
         Indexes      => \@indexes,
         Filters      => $filters,
         RangeFilters => $range_filters,
