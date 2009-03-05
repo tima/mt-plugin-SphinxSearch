@@ -291,6 +291,7 @@ sub _get_source_config {
 			# Include String columns in index. If uncommenting this then comment the line in _get_data_rows above
 			# delete $fields{$_} if ($index_hash->{string_group_columns}->{$_});
 		}
+		delete $fields{$index_hash->{id_column}} if($index_hash->{id_column});
 		$field_loop{$index} = \%fields;
     }
 
