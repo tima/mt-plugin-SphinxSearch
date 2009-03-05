@@ -15,6 +15,7 @@
             <option value="stem_enru"<TMPL_IF NAME=INDEX_MORPHOLOGY_STEM_ENRU> selected="selected"</TMPL_IF>>English and Russian Stemming</option>
             <option value="soundex"<TMPL_IF NAME=INDEX_MORPHOLOGY_SOUNDEX> selected="selected"</TMPL_IF>>Soundex</option>
         </select>
+		<p>Enables matching of words to their stem, base or root form. Example: the string "cats" (and possibly "catlike", "catty" etc.) as based on the root "cat", and "stemmer", "stemming", "stemmed" as based on "stem"</p>
     </div>
 </div>
 
@@ -31,7 +32,6 @@
 <div class="setting grouped">
 <div class="label"><label for="sphinx_path">Sphinx Binary Path:</label></div>
 <div class="field"><input type="text" name="sphinx_path" value="<TMPL_VAR NAME=SPHINX_PATH>" />
-	<p>The installed path for the sphinx binaries, specifically <code>indexer</code>.  If <code>indexer</code> is installed at <code>/usr/local/bin/indexer</code>, the value here should be <code>/usr/local/bin</code>.</p>
 </div>
 </div>
 

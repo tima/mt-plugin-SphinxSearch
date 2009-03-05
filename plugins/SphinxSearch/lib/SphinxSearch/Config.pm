@@ -62,7 +62,7 @@ sub _get_data_rows {
 			} elsif ($index_hash->{string_group_columns}->{$_}) {
 
 				# Include String columns in index. If commenting this then uncomment the line in _get_source_config below
-				push @normal_fields, \%tmp_field;
+				push @normal_fields, {key => $_, value => $obj->$_ };
 				
 				$tmp_field{key} = $_."_crc32";
 				$tmp_field{value} = $obj->$_?crc32($obj->$_):'';
