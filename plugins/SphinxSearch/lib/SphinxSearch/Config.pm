@@ -61,6 +61,9 @@ sub _get_data_rows {
 
 			} elsif ($index_hash->{string_group_columns}->{$_}) {
 
+				# Include String columns in index. If commenting this then uncomment the line in _get_source_config below
+				push @normal_fields, \%tmp_field;
+				
 				$tmp_field{key} = $_."_crc32";
 				$tmp_field{value} = $obj->$_?crc32($obj->$_):'';
 				push @string_fields, \%tmp_field;
@@ -285,7 +288,8 @@ sub _get_source_config {
 		foreach( keys %fields ) {
 			delete $fields{$_} if ($index_hash->{date_columns}->{$_});
 			delete $fields{$_} if ($index_hash->{group_columns}->{$_});
-			delete $fields{$_} if ($index_hash->{string_group_columns}->{$_});
+			# Include String columns in index. If uncommenting this then comment the line in _get_data_rows above
+			# delete $fields{$_} if ($index_hash->{string_group_columns}->{$_});
 		}
 		$field_loop{$index} = \%fields;
     }
