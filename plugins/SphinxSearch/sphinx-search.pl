@@ -62,6 +62,7 @@ sub init_registry {
         config_settings => {
             UseSphinxTasks              => { default => 1, },
             UseSphinxDistributedIndexes => { default => 0, },
+            SphinxMaxMatches            => { default => -1 },
         },
         applications => {
             cms => { methods => { 'gen_sphinx_conf' => \&gen_sphinx_conf, } },

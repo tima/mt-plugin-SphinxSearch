@@ -266,8 +266,18 @@ sub _get_sphinx_results {
     my $offset = $app->param('offset') || 0;
     $offset = $limit * ( $app->param('page') - 1 )
       if ( !$offset && $limit && $app->param('page') );
-    my $max = MT::Entry->count(
-        { status => MT::Entry::RELEASE(), blog_id => \@blog_ids } );
+
+    my $max;
+    if ($app->param ('max_matches')) {
+        $max = $app->param ('max_matches');
+    }
+    elsif ($app->config->SphinxMaxMatches < 0) {
+        $max = MT::Entry->count(
+            { status => MT::Entry::RELEASE(), blog_id => \@blog_ids } );   
+    }
+    elsif ($app->config->SphinxMaxMatches) {
+        $max = $app->config->SphinxMaxMatches;
+    }
 
     my $match_mode = $app->param('match_mode') || 'all';
 
@@ -281,7 +291,7 @@ sub _get_sphinx_results {
         Offset       => $offset,
         Limit        => $limit,
         Match        => $match_mode,
-        Max          => $max,
+        ( $max ? ( Max => $max ) : () )
     );
     return unless ($results);
     my $i = 0;
