@@ -52,7 +52,10 @@ sub init_app {
         };
         my $orig_search_terms = \&MT::App::Search::search_terms;
         *MT::App::Search::search_terms = sub {
-            return ('') if ( $_[0]->param('searchall') );
+            if ($_[0]->param ('searchall')) {
+                $app->param ('search', '');
+                return ('');
+            }
             return $orig_search_terms->(@_);
         };
         my $orig_prep_context = \&MT::App::Search::prepare_context;
@@ -60,14 +63,17 @@ sub init_app {
             my $ctx = $orig_prep_context->(@_);
             _sphinx_search_context_init($ctx);
             return $ctx;
-          }
+          };
     }
 
 }
 
 sub init_request {
-    require SphinxSearch::Util;
-    SphinxSearch::Util::_reset_sphinx();
+    my ($cb, $app) = @_;
+    
+    if (!$app->param ('search') && $app->param ('searchall')) {
+        $app->param ('search', 'SPHINX_SEARCH_SEARCHALL');
+    }
 }
 
 sub straight_sphinx_search {

@@ -4,7 +4,7 @@ use warnings;
 
 use lib 't/lib', 'lib', 'extlib';
 
-use Test::More tests => 23;
+use Test::More tests => 24;
 use Test::Deep;
 
 use MT::Test qw ( :cms );
@@ -78,4 +78,13 @@ check_indexes(
     { Source => [qw( entry comment )] },
     [qw( entry_index entry_delta_index comment_index comment_delta_index )],
     "Entry and comment source indexes"
+);
+
+require MT;
+MT->config->UseSphinxDistributedIndexes(1);
+
+check_indexes(
+    { Source => [qw( entry )] },
+    [qw( entry_index_distributed )],
+    "Distributed entry index"
 );
