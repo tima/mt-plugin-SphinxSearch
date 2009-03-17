@@ -19,7 +19,7 @@ sub which_indexes {
     
     if (my $indexer = $params{Indexer}) {
         if ($indexer eq 'all') {
-            push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } keys %indexes;
+            push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index_distributed' ) } keys %indexes;
         }
         elsif ($indexer eq 'main') {
             push @indexes, map { $_ . '_index' } keys %indexes;
@@ -37,7 +37,7 @@ sub which_indexes {
             @sources = ($sources);
         }
         @sources = map { my $s = $_; if ($s =~ /::/) { $s = $s->datasource } $s; } @sources;
-        push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index' ) } @sources;
+        push @indexes, map { $indexes{$_}->{delta} && $use_deltas ? ( $_ . '_index', $_ . '_delta_index' ) : ( $_ . '_index_distributed' ) } @sources;
     }
     
     return @indexes;
