@@ -110,17 +110,14 @@ sub sphinx_search {
 
     if ( exists $params{Sort} ) {
         exists $params{Sort}->{Ascend}
-          ? $spx->SetSortMode( SPH_SORT_ATTR_ASC,
-            $params{Sort}->{Ascend} )
+          ? $spx->SetSortMode( SPH_SORT_ATTR_ASC, $params{Sort}->{Ascend} )
           : exists $params{Sort}->{Descend}
-          ? $spx->SetSortMode( SPH_SORT_ATTR_DESC,
-            $params{Sort}->{Descend} )
+          ? $spx->SetSortMode( SPH_SORT_ATTR_DESC, $params{Sort}->{Descend} )
           : exists $params{Sort}->{Segments}
           ? $spx->SetSortMode( SPH_SORT_TIME_SEGMENTS,
             $params{Sort}->{Segments} )
           : exists $params{Sort}->{Extended}
-          ? $spx->SetSortMode( SPH_SORT_EXTENDED,
-            $params{Sort}->{Extended} )
+          ? $spx->SetSortMode( SPH_SORT_EXTENDED, $params{Sort}->{Extended} )
           : $spx->SetSortMode(SPH_SORT_RELEVANCE);
     }
     else {
@@ -131,11 +128,11 @@ sub sphinx_search {
 
     if ( exists $params{Match} ) {
         my $match = $params{Match};
-        $match eq 'extended' ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
-          : $match eq 'boolean' ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
-          : $match eq 'phrase'  ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
-          : $match eq 'any'     ? $spx->SetMatchMode(SPH_MATCH_ANY)
-          :                       $spx->SetMatchMode(SPH_MATCH_ALL);
+            $match eq 'extended' ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
+          : $match eq 'boolean'  ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
+          : $match eq 'phrase'   ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
+          : $match eq 'any'      ? $spx->SetMatchMode(SPH_MATCH_ANY)
+          :                        $spx->SetMatchMode(SPH_MATCH_ALL);
     }
     else {
         $spx->SetMatchMode(SPH_MATCH_ALL);
@@ -162,11 +159,11 @@ sub sphinx_search {
     my $results = $spx->Query( $search,
         join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) )
     );
-    if ( !$results ) {
+    if ( !$results || exists $results->{error} ) {
+        my $errstr = $results ? $results->{error} : $spx->GetLastError;
         MT->instance->log(
             {
-                message => "Error querying searchd daemon: "
-                  . $spx->GetLastError,
+                message  => "Error querying searchd daemon: " . $errstr,
                 level    => MT::Log::ERROR(),
                 class    => 'search',
                 category => 'straight_search',
@@ -182,7 +179,7 @@ sub sphinx_search {
     foreach my $match ( @{ $results->{matches} } ) {
         my $id = $match->{doc};
         my $o = $meth->($id) or next;
-        $o->{__sphinx_result_index} = sprintf ("%04d", $i++);
+        $o->{__sphinx_result_index} = sprintf( "%04d", $i++ );
         push @result_objs, $o;
     }
 
