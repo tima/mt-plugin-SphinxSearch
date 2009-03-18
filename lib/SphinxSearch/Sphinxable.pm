@@ -159,8 +159,10 @@ sub sphinx_search {
     my $results = $spx->Query( $search,
         join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) )
     );
-    if ( !$results || exists $results->{error} ) {
+    if ( !$results || $results->{error} ) {
         my $errstr = $results ? $results->{error} : $spx->GetLastError;
+        require MT::Request;
+        MT::Request->instance->stash ('sphinx_error', $errstr);
         MT->instance->log(
             {
                 message  => "Error querying searchd daemon: " . $errstr,
