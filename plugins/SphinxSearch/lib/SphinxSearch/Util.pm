@@ -29,9 +29,8 @@ sub _get_sphinx {
 }
 
 sub _get_sphinx_error {
-    # return unless $spx;
-    my $spx = _get_sphinx();
-    $spx->GetLastError();
+    require MT::Request;
+    return MT::Request->instance->cache ('sphinx_error');
 }
 
 1;
