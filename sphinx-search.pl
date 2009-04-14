@@ -11,7 +11,7 @@ use File::Spec;
 use POSIX;
 
 use vars qw( $VERSION $plugin );
-$VERSION = '0.99.66mt4';
+$VERSION = '0.99.67mt4';
 $plugin  = MT::Plugin::SphinxSearch->new(
     {
         id   => 'SphinxSearch',
