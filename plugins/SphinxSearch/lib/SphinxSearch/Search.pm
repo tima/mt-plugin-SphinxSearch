@@ -185,7 +185,7 @@ sub _get_sphinx_results {
         {
             my $class = $indexes{ $indexes[0] }->{mva}->{$filter}->{to};
             eval("require $class;");
-            next if ($@);
+            die ("Unable to load $class for filter $filter: $@") if ($@);
             my @v = $class->load(
                 {
                     $lookup => $app->param("filter_$filter"),
@@ -196,7 +196,7 @@ sub _get_sphinx_results {
                     )
                 }
             );
-            next unless (@v);
+            die ("Unable to find " . $app->param ("filter_$filter") . " for $filter") unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
 
             if ( my $stash =
@@ -222,7 +222,7 @@ sub _get_sphinx_results {
         {
             my $class = $indexes{ $indexes[0] }->{mva}->{$filter}->{to};
             eval("require $class;");
-            next if ($@);
+            die ("Unable to load $class for filter $filter: $@") if ($@);
             my @v =
               $class->search_by_meta(
                 $lookup_meta => $app->param("filter_$filter") );
@@ -230,7 +230,7 @@ sub _get_sphinx_results {
                 my %blogs = map { $_ => 1 } @blog_ids;
                 @v = grep { $blogs{ $_->blog_id } } @v;
             }
-            next unless (@v);
+            die ("Unable to find " . $app->param ("filter_$filter") . " for $filter") unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
 
             if ( my $stash =
