@@ -289,7 +289,7 @@ sub _get_sphinx_results {
 
     require SphinxSearch::Sphinxable;
     my $results = SphinxSearch::Sphinxable->sphinx_search(
-        \@classes, delete $app->{search_string},
+        \@classes, $app->{search_string},
         Indexes      => \@indexes,
         Filters      => $filters,
         RangeFilters => $range_filters,
@@ -503,5 +503,11 @@ sub _sphinx_search_context_init {
     $ctx->stash( 'offset', $r->stash('sphinx_pages_offset') );
     $ctx->stash( 'count',  $r->stash('sphinx_results_total') );
 }
+
+sub take_down {
+    my ($cb, $app) = @_;
+    delete $app->{search_string};
+}
+
 
 1;

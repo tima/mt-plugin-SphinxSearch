@@ -8,7 +8,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 require MT::Template;
 my $tmpl = MT::Template->get_by_key(
@@ -64,6 +64,13 @@ out_like(
     "mt:searchstring works correctly for a tag search"
 );
 
+out_like(
+    'MT::App::Search',
+    { search => 'some search string' },
+    qr/Search string: some search string/,
+    "mt:searchstring works for a straight search"
+);
+
 my $count = MT::Entry->count( { status => MT::Entry::RELEASE() } );
 out_like(
     'MT::App::Search',
@@ -85,5 +92,9 @@ out_like(
     "CGI max_matches parameter"
 );
 
-out_like( 'MT::App::Search', { searchall => 1 },
-    qr/Search count: $count/, "Using searchall works" );
+out_like(
+    'MT::App::Search',
+    { searchall => 1 },
+    qr/Search count: $count/,
+    "Using searchall works"
+);
