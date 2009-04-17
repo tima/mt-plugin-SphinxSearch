@@ -77,6 +77,7 @@ sub init_registry {
                     'sphinx_search.author' =>
                       '$SphinxSearch::SphinxSearch::Search::author',
                     'init_request' => '$SphinxSearch::SphinxSearch::Search::init_request',
+                    'take_down'    => '$SphinxSearch::SphinxSearch::Search::take_down',
                 }
             }
         },
