@@ -47,7 +47,7 @@ sub init_app {
                   . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr )
             ) unless ( $results && $results->{result_objs} );
             my @results = ( @{ $results->{result_objs} } );
-            return ( $results->{query_results}->{total},
+            return ( $results->{query_results}->{total_found},
                 sub { shift @results } );
         };
         my $orig_search_terms = \&MT::App::Search::search_terms;
@@ -314,15 +314,13 @@ sub _get_sphinx_results {
         }
     }
 
-    my $num_pages = ceil( $results->{query_results}->{total} / $limit );
+    my $num_pages = ceil( $results->{query_results}->{total_found} / $limit );
     my $cur_page  = int( $offset / $limit ) + 1;
 
     require MT::Request;
     my $r = MT::Request->instance;
     $r->stash( 'sphinx_searched_indexes', [@indexes] );
-    $r->stash( 'sphinx_results_total', $results->{query_results}->{total} );
-    $r->stash( 'sphinx_results_total_found',
-        $results->{query_results}->{total_found} );
+    $r->stash( 'sphinx_results_total', $results->{query_results}->{total_found} );
     $r->stash( 'sphinx_pages_number',  $num_pages );
     $r->stash( 'sphinx_pages_current', $cur_page );
     $r->stash( 'sphinx_pages_offset',  $offset );

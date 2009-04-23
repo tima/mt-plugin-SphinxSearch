@@ -153,6 +153,12 @@ sub sphinx_search {
         $max = $params{Max};
     }
 
+    # if offset is beyond max, set max to
+    # include this page and the next
+    if ( ( $offset + $limit ) >= $max ) {
+        $max = $offset + ( 2 * $limit );
+    }
+
     $spx->SetLimits( $offset, $limit, $max );
 
     require SphinxSearch::Index;
@@ -162,7 +168,7 @@ sub sphinx_search {
     if ( !$results || $results->{error} ) {
         my $errstr = $results ? $results->{error} : $spx->GetLastError;
         require MT::Request;
-        MT::Request->instance->stash ('sphinx_error', $errstr);
+        MT::Request->instance->stash( 'sphinx_error', $errstr );
         MT->instance->log(
             {
                 message  => "Error querying searchd daemon: " . $errstr,
