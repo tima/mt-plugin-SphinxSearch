@@ -65,7 +65,7 @@ sub init_registry {
             SphinxMaxMatches            => { default => 1000 },
         },
         applications => {
-            cms => { methods => { 'gen_sphinx_conf' => \&gen_sphinx_conf, } },
+            cms => { methods => { 'gen_sphinx_conf' => 'SphinxSearch::CMS::gen_sphinx_conf', } },
             new_search => {
                 callbacks => {
                     'sphinx_search.tag' =>
@@ -285,11 +285,12 @@ sub run_cmd {
 sub start_indexer {
     my $plugin = shift;
     my ($indexes) = @_;
-    $indexes = 'main' if ( !$indexes );
+    $indexes = 'main' if ( !$indexes );    
     my $sphinx_path = $plugin->get_config_value( 'sphinx_path', 'system' )
       or return $plugin->error("Sphinx path is not set");
 
-    my @indexes = $plugin->which_indexes( Indexer => $indexes );
+    require SphinxSearch::Index;
+    my @indexes = SphinxSearch::Index->which_indexes( Indexer => $indexes );
 
     return $plugin->error("No indexes to rebuild") if ( !@indexes );
 
