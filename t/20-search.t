@@ -3,6 +3,8 @@ use lib qw( t/lib lib extlib );
 use strict;
 use warnings;
 
+use List::Util qw( min );
+
 BEGIN {
     $ENV{MT_APP} = 'MT::App::Search';
 }
@@ -41,19 +43,22 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
     require Sphinx::Search;
     my $orig_exec = \&Sphinx::Search::Query;
     *Sphinx::Search::Query = sub {
-        my $max_matches = shift->{_maxmatches};
+        my $max_matches = shift->{_limit};
         require MT::Entry;
+        my $total_found =
+          MT::Entry->count( { status => MT::Entry::RELEASE() } );
         my @entries = MT::Entry->load( { status => MT::Entry::RELEASE() },
             { ( $max_matches ? ( limit => $max_matches ) : () ) } );
+        my $total = min( scalar @entries, $total_found );
         return {
             matches     => [ map { { doc => $_->id } } @entries ],
-            total       => scalar @entries,
-            total_found => scalar @entries
+            total       => $total,
+            total_found => $total_found,
         };
     };
 }
 $tmpl->text(
-    "Search string: <mt:searchstring>\nSearch count: <mt:searchresultcount>");
+    "Search string: <mt:searchstring>\nSearch count: <mt:searchresultcount>\n<mt:searchresults>Entry #<mt:entryid>\n</mt:searchresults>");
 $tmpl->save or die $tmpl->errstr;
 
 # we have to search for a known tag
@@ -87,8 +92,8 @@ MT::Object->driver->clear_cache;
 
 out_like(
     'MT::App::Search',
-    { tag => 'rain', max_matches => 2 },
-    qr/Search count: 2/,
+    { tag => 'rain', max_matches => 2, limit => 2 },
+    qr/Search count: $count\n(?:Entry #(?:\d+)\n){2}$/m,
     "CGI max_matches parameter"
 );
 
