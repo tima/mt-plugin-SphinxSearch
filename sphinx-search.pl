@@ -192,7 +192,7 @@ sub sphinx_indexer_task {
     my $which  = shift;
     my $task   = shift;
 
-    return unless $plugin->get_config_value( 'use_indexer_tasks', 'system' );
+    return unless $plugin->get_config_value( 'use_indexer_tasks', 'system' ) && MT->config->UseSphinxTasks;
 
     require MT::TheSchwartz;
     require TheSchwartz::Job;
