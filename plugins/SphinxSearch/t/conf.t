@@ -73,6 +73,7 @@ $plugin->sphinx_indexer_task ('main');
 is (MT::TheSchwartz::Job->count, 0, "No jobs were added");
 
 $pd->data ({ use_indexer_tasks => 1 });
+MT->config->UseSphinxTasks (1);
 
 $plugin->sphinx_indexer_task ('main');
 
