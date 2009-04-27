@@ -52,8 +52,8 @@ sub init_app {
         };
         my $orig_search_terms = \&MT::App::Search::search_terms;
         *MT::App::Search::search_terms = sub {
-            if ($_[0]->param ('searchall')) {
-                $app->param ('search', '');
+            if ( $_[0]->param('searchall') ) {
+                $app->param( 'search', '' );
                 return ('');
             }
             return $orig_search_terms->(@_);
@@ -63,16 +63,16 @@ sub init_app {
             my $ctx = $orig_prep_context->(@_);
             _sphinx_search_context_init($ctx);
             return $ctx;
-          };
+        };
     }
 
 }
 
 sub init_request {
-    my ($cb, $app) = @_;
-    
-    if (!$app->param ('search') && $app->param ('searchall')) {
-        $app->param ('search', 'SPHINX_SEARCH_SEARCHALL');
+    my ( $cb, $app ) = @_;
+
+    if ( !$app->param('search') && $app->param('searchall') ) {
+        $app->param( 'search', 'SPHINX_SEARCH_SEARCHALL' );
     }
 }
 
@@ -185,7 +185,7 @@ sub _get_sphinx_results {
         {
             my $class = $indexes{ $indexes[0] }->{mva}->{$filter}->{to};
             eval("require $class;");
-            die ("Unable to load $class for filter $filter: $@") if ($@);
+            die("Unable to load $class for filter $filter: $@") if ($@);
             my @v = $class->load(
                 {
                     $lookup => $app->param("filter_$filter"),
@@ -196,7 +196,10 @@ sub _get_sphinx_results {
                     )
                 }
             );
-            die ("Unable to find " . $app->param ("filter_$filter") . " for $filter") unless (@v);
+            die(    "Unable to find "
+                  . $app->param("filter_$filter")
+                  . " for $filter" )
+              unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
 
             if ( my $stash =
@@ -222,7 +225,7 @@ sub _get_sphinx_results {
         {
             my $class = $indexes{ $indexes[0] }->{mva}->{$filter}->{to};
             eval("require $class;");
-            die ("Unable to load $class for filter $filter: $@") if ($@);
+            die("Unable to load $class for filter $filter: $@") if ($@);
             my @v =
               $class->search_by_meta(
                 $lookup_meta => $app->param("filter_$filter") );
@@ -230,7 +233,10 @@ sub _get_sphinx_results {
                 my %blogs = map { $_ => 1 } @blog_ids;
                 @v = grep { $blogs{ $_->blog_id } } @v;
             }
-            die ("Unable to find " . $app->param ("filter_$filter") . " for $filter") unless (@v);
+            die(    "Unable to find "
+                  . $app->param("filter_$filter")
+                  . " for $filter" )
+              unless (@v);
             $filters->{$filter} = [ map { $_->id } @v ];
 
             if ( my $stash =
@@ -274,14 +280,14 @@ sub _get_sphinx_results {
       if ( !$offset && $limit && $app->param('page') );
 
     my $max;
-    if ($app->param ('max_matches')) {
-        $max = $app->param ('max_matches');
+    if ( $app->param('max_matches') ) {
+        $max = $app->param('max_matches');
     }
-    elsif ($app->config->SphinxMaxMatches < 0) {
+    elsif ( $app->config->SphinxMaxMatches < 0 ) {
         $max = MT::Entry->count(
-            { status => MT::Entry::RELEASE(), blog_id => \@blog_ids } );   
+            { status => MT::Entry::RELEASE(), blog_id => \@blog_ids } );
     }
-    elsif ($app->config->SphinxMaxMatches) {
+    elsif ( $app->config->SphinxMaxMatches ) {
         $max = $app->config->SphinxMaxMatches;
     }
 
@@ -320,7 +326,8 @@ sub _get_sphinx_results {
     require MT::Request;
     my $r = MT::Request->instance;
     $r->stash( 'sphinx_searched_indexes', [@indexes] );
-    $r->stash( 'sphinx_results_total', $results->{query_results}->{total_found} );
+    $r->stash( 'sphinx_results_total',
+        $results->{query_results}->{total_found} );
     $r->stash( 'sphinx_pages_number',  $num_pages );
     $r->stash( 'sphinx_pages_current', $cur_page );
     $r->stash( 'sphinx_pages_offset',  $offset );
@@ -505,9 +512,8 @@ sub _sphinx_search_context_init {
 }
 
 sub take_down {
-    my ($cb, $app) = @_;
+    my ( $cb, $app ) = @_;
     delete $app->{search_string};
 }
-
 
 1;
