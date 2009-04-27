@@ -441,6 +441,8 @@ sub author {
     my ( $cb, $app, $filters, $range_filters, $stash, $vars ) = @_;
     my $author = $app->param('author') || $app->param('username');
 
+    return 1 unless $author;
+
     # if there's a comma, split 'em
     require MT::Author;
     if ( $author && $author =~ /,/ ) {
