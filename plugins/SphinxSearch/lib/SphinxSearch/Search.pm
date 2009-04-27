@@ -158,19 +158,40 @@ sub _get_sphinx_results {
     my $range_filters = {};
     my $vars          = {};
 
-    $app->run_callbacks( 'sphinx_search.tag', $app, $filters, $range_filters,
-        $filter_stash )
-      if ( $app->mode eq 'tag' );
-    $app->run_callbacks( 'sphinx_search.category', $app, $filters,
-        $range_filters, $filter_stash )
-      if ( $app->param('category') || $app->param('category_basename') );
-    $app->run_callbacks( 'sphinx_search.date', $app, $filters, $range_filters,
-        $filter_stash )
-      if ( $app->param('date')
-        || $app->param('date_start')
-        || $app->param('date_end') );
-    $app->run_callbacks( 'sphinx_search.author', $app, $filters, $range_filters,
-        $filter_stash, $vars );
+    my @callbacks = (
+        [ 'tag', sub { $_[0]->mode eq 'tag' } ],
+        [
+            'category',
+            sub {
+                $_[0]->param('category') || $_[0]->param('category_basename');
+              }
+        ],
+        [
+            'date',
+            sub {
+                $_[0]->param('date')
+                  || $_[0]->param('date_start')
+                  || $_[0]->param('date_end');
+              }
+        ],
+        [ 'author', sub { 1 } ]
+    );
+
+    for my $cb (@callbacks) {
+        my ( $cb_name, $cb_cond ) = @$cb;
+        if ( $cb_cond->($app) ) {
+            unless (
+                $app->run_callbacks(
+                    'sphinx_search.' . $cb_name, $app,
+                    $filters,                    $range_filters,
+                    $filter_stash
+                )
+              )
+            {
+                die( "Unable to set $cb_name filter: " . $app->errstr );
+            }
+        }
+    }
 
     $filter_stash->{"sphinx_filter_$_"} = join( ',', @{ $range_filters->{$_} } )
       foreach ( keys %$range_filters );
@@ -386,6 +407,8 @@ sub tag {
 
         $filters->{tag} = \@tag_ids;
     }
+
+    1;
 }
 
 sub category {
@@ -406,10 +429,15 @@ sub category {
         if (@all_cats) {
             $filters->{category} = [ map { $_->id } @all_cats ];
         }
+        else {
+            return $cb->error("Unable to find category $cat_basename");
+        }
 
         require MT::Request;
         $stash->{sphinx_search_categories} = \@all_cats;
     }
+
+    1;
 }
 
 sub date {
@@ -442,6 +470,8 @@ sub date {
 
         $range_filters->{created_on} = [ $date_start, $date_end ];
     }
+
+    1;
 }
 
 sub author {
@@ -456,6 +486,7 @@ sub author {
         $author = [ split( /\s*,\s*/, $author ) ];
     }
     my @authors = MT::Author->load( { name => $author } );
+    return $cb->error("Unable to locate author $author") unless (@authors);
     $author = $authors[0];
     if ( $author && !$app->param('following_data') ) {
         $filters->{author_id} = [ map { $_->id } @authors ];
@@ -471,6 +502,8 @@ sub author {
             $vars->{following_data} = 1;
         }
     }
+
+    1;
 }
 
 sub _sphinx_search_context_init {

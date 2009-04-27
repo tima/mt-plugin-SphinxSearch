@@ -10,7 +10,8 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 6;
+use Test::More tests => 9;
+use Test::Deep;
 
 require MT::Template;
 my $tmpl = MT::Template->get_by_key(
@@ -35,6 +36,7 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
     "When searchd isn't available, return a useful error"
 );
 
+my %filters;
 {
     local $SIG{__WARN__} = sub { };
 
@@ -43,7 +45,12 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
     require Sphinx::Search;
     my $orig_exec = \&Sphinx::Search::Query;
     *Sphinx::Search::Query = sub {
-        my $max_matches = shift->{_limit};
+        my $self        = shift;
+        my $max_matches = $self->{_limit};
+        %filters = ();
+        for my $f ( @{ $self->{_filters} } ) {
+            $filters{ $f->{attr} } = $f->{values};
+        }
         require MT::Entry;
         my $total_found =
           MT::Entry->count( { status => MT::Entry::RELEASE() } );
@@ -58,7 +65,8 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
     };
 }
 $tmpl->text(
-    "Search string: <mt:searchstring>\nSearch count: <mt:searchresultcount>\n<mt:searchresults>Entry #<mt:entryid>\n</mt:searchresults>");
+"Search string: <mt:searchstring>\nSearch count: <mt:searchresultcount>\n<mt:searchresults>Entry #<mt:entryid>\n</mt:searchresults>"
+);
 $tmpl->save or die $tmpl->errstr;
 
 # we have to search for a known tag
@@ -103,3 +111,16 @@ out_like(
     qr/Search count: $count/,
     "Using searchall works"
 );
+
+# now to verify the filter bits
+
+_run_app( 'MT::App::Search', { searchall => 1, author => 'Bob D' } );
+cmp_bag( $filters{author_id}, [3], "Author filter works as expected" );
+
+_run_app( 'MT::App::Search', { tag => 'rain' } );
+cmp_bag( $filters{tag}, [2], "Tag filter works as expected" );
+
+_run_app( 'MT::App::Search', { searchall => 1, category => 'subfoo' } );
+cmp_bag( $filters{category}, [3], "Category filter works as expected" );
+
+1;
