@@ -295,6 +295,16 @@ sub _get_sphinx_results {
           $app->param("sfilter_$filter");
     }
 
+    if ($MT::DebugMode) {
+        for my $key (sort keys %$filters) {
+            warn "SPHINX FILTER: $key => " . join (', ', @{$filters->{$key}});
+        }
+        
+        for my $key (sort keys %$range_filters) {
+            warn "SPHINX RANGE FILTER: $key => " . join (', ', @{$range_filters->{$key}});
+        }
+    }
+
     my $limit  = $app->param('limit')  || $app->{searchparam}{SearchMaxResults};
     my $offset = $app->param('offset') || 0;
     $offset = $limit * ( $app->param('page') - 1 )
@@ -497,7 +507,9 @@ sub author {
         if ( !$@ ) {
             my @followings = MT::Community::Friending::followings($author);
 
-            $filters->{author_id}   = [ map { $_->id } @followings ];
+            # if the author has no followers, filter on author_id -1 (i.e., nobody)
+            # we can't pass an empty filter or it'll load for everybody
+            $filters->{author_id}   = [ @followings ? (map { $_->id } @followings) : ( -1 ) ];
             $stash->{author}        = $author;
             $vars->{following_data} = 1;
         }
