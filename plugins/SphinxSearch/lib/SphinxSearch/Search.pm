@@ -184,7 +184,7 @@ sub _get_sphinx_results {
                 $app->run_callbacks(
                     'sphinx_search.' . $cb_name, $app,
                     $filters,                    $range_filters,
-                    $filter_stash
+                    $filter_stash,               $vars
                 )
               )
             {
@@ -296,12 +296,14 @@ sub _get_sphinx_results {
     }
 
     if ($MT::DebugMode) {
-        for my $key (sort keys %$filters) {
-            warn "SPHINX FILTER: $key => " . join (', ', @{$filters->{$key}});
+        for my $key ( sort keys %$filters ) {
+            warn "SPHINX FILTER: $key => "
+              . join( ', ', @{ $filters->{$key} } );
         }
-        
-        for my $key (sort keys %$range_filters) {
-            warn "SPHINX RANGE FILTER: $key => " . join (', ', @{$range_filters->{$key}});
+
+        for my $key ( sort keys %$range_filters ) {
+            warn "SPHINX RANGE FILTER: $key => "
+              . join( ', ', @{ $range_filters->{$key} } );
         }
     }
 
@@ -507,9 +509,10 @@ sub author {
         if ( !$@ ) {
             my @followings = MT::Community::Friending::followings($author);
 
-            # if the author has no followers, filter on author_id -1 (i.e., nobody)
-            # we can't pass an empty filter or it'll load for everybody
-            $filters->{author_id}   = [ @followings ? (map { $_->id } @followings) : ( -1 ) ];
+         # if the author has no followers, filter on author_id -1 (i.e., nobody)
+         # we can't pass an empty filter or it'll load for everybody
+            $filters->{author_id} =
+              [ @followings ? ( map { $_->id } @followings ) : (-1) ];
             $stash->{author}        = $author;
             $vars->{following_data} = 1;
         }
