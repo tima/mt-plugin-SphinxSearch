@@ -10,7 +10,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 9;
+use Test::More tests => 11;
 use Test::Deep;
 
 require MT::Template;
@@ -37,6 +37,8 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
 );
 
 my %filters;
+my $warning = '';
+my $error = '';
 {
     local $SIG{__WARN__} = sub { };
 
@@ -61,6 +63,8 @@ my %filters;
             matches     => [ map { { doc => $_->id } } @entries ],
             total       => $total,
             total_found => $total_found,
+            ( $error   ? ( error   => $error )   : () ),
+            ( $warning ? ( warning => $warning ) : () )
         };
     };
 }
@@ -122,5 +126,29 @@ cmp_bag( $filters{tag}, [2], "Tag filter works as expected" );
 
 _run_app( 'MT::App::Search', { searchall => 1, category => 'subfoo' } );
 cmp_bag( $filters{category}, [3], "Category filter works as expected" );
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+$error = "This is my error";
+out_like(
+    'MT::App::Search',
+    { tag => 'rain' },
+    qr/This is my error/,
+    "Error is exposed"
+);
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+$error   = '';
+$warning = 'This is my warning';
+
+out_like(
+    'MT::App::Search',
+    { tag => 'rain' },
+    qr/This is my warning/,
+    "Warning is exposed"
+);
 
 1;
