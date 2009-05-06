@@ -165,8 +165,14 @@ sub sphinx_search {
     my $results = $spx->Query( $search,
         join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) )
     );
-    if ( !$results || $results->{error} ) {
-        my $errstr = $results ? $results->{error} : $spx->GetLastError;
+    if (  !$results
+        || $results->{error}
+        || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
+    {
+        my $errstr =
+          $results
+          ? ( $results->{error} || $results->{warning} )
+          : ( $spx->GetLastError || $spx->GetLastWarning );
         require MT::Request;
         MT::Request->instance->stash( 'sphinx_error', $errstr );
         MT->instance->log(

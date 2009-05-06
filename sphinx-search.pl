@@ -63,6 +63,7 @@ sub init_registry {
             UseSphinxTasks              => { default => 1, },
             UseSphinxDistributedIndexes => { default => 0, },
             SphinxMaxMatches            => { default => 1000 },
+            SphinxErrorOnWarning        => { default => 1 },
         },
         applications => {
             cms => { methods => { 'gen_sphinx_conf' => 'SphinxSearch::CMS::gen_sphinx_conf', } },
