@@ -328,7 +328,8 @@ sub _get_sphinx_results {
 
     require SphinxSearch::Sphinxable;
     my $results = SphinxSearch::Sphinxable->sphinx_search(
-        \@classes, $app->{search_string},
+        \@classes,
+        $app->{search_string},
         Indexes      => \@indexes,
         Filters      => $filters,
         RangeFilters => $range_filters,
@@ -336,7 +337,12 @@ sub _get_sphinx_results {
         Offset       => $offset,
         Limit        => $limit,
         Match        => $match_mode,
-        ( $max ? ( Max => $max ) : () )
+        ( $max ? ( Max => $max ) : () ),
+        TextFilters => (
+              $app->param('use_text_filters')
+            ? $app->param('use_text_filters')
+            : $app->config->SphinxUseTextFilters
+        ),
     );
     return unless ($results);
     my $i = 0;
@@ -428,6 +434,7 @@ sub category {
     if ( my $cat_basename = $app->param('category')
         || $app->param('category_basename') )
     {
+
         my @blog_ids = keys %{ $app->{searchparam}{IncludeBlogs} };
         my @all_cats;
         require MT::Category;

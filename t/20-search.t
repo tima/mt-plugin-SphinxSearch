@@ -3,6 +3,7 @@ use lib qw( t/lib lib extlib );
 use strict;
 use warnings;
 
+use Data::Dumper;
 use List::Util qw( min );
 
 BEGIN {
@@ -10,7 +11,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 11;
+use Test::More tests => 20;
 use Test::Deep;
 
 require MT::Template;
@@ -38,7 +39,8 @@ qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection
 
 my %filters;
 my $warning = '';
-my $error = '';
+my $error   = '';
+my $search  = '';
 {
     local $SIG{__WARN__} = sub { };
 
@@ -50,6 +52,7 @@ my $error = '';
         my $self        = shift;
         my $max_matches = $self->{_limit};
         %filters = ();
+        $search  = $_[0];
         for my $f ( @{ $self->{_filters} } ) {
             $filters{ $f->{attr} } = $f->{values};
         }
@@ -73,6 +76,8 @@ $tmpl->text(
 );
 $tmpl->save or die $tmpl->errstr;
 
+require MT::Session;
+
 # we have to search for a known tag
 out_like(
     'MT::App::Search',
@@ -81,6 +86,7 @@ out_like(
     "mt:searchstring works correctly for a tag search"
 );
 
+MT::Session->remove( { kind => 'CS' } );
 out_like(
     'MT::App::Search',
     { search => 'some search string' },
@@ -88,6 +94,7 @@ out_like(
     "mt:searchstring works for a straight search"
 );
 
+MT::Session->remove( { kind => 'CS' } );
 my $count = MT::Entry->count( { status => MT::Entry::RELEASE() } );
 out_like(
     'MT::App::Search',
@@ -96,7 +103,6 @@ out_like(
     "Returned all the entries"
 );
 
-require MT::Session;
 MT::Session->remove( { kind => 'CS' } );
 
 require MT::Object;
@@ -109,6 +115,7 @@ out_like(
     "CGI max_matches parameter"
 );
 
+MT::Session->remove( { kind => 'CS' } );
 out_like(
     'MT::App::Search',
     { searchall => 1 },
@@ -118,14 +125,57 @@ out_like(
 
 # now to verify the filter bits
 
-_run_app( 'MT::App::Search', { searchall => 1, author => 'Bob D' } );
+MT::Session->remove( { kind => 'CS' } );
+_run_app( 'MT::App::Search',
+    { searchall => 1, author => 'Bob D', use_text_filters => 0 } );
 cmp_bag( $filters{author_id}, [3], "Author filter works as expected" );
+is( $search, '', "Author filter does not set search string" );
 
-_run_app( 'MT::App::Search', { tag => 'rain' } );
+MT::Session->remove( { kind => 'CS' } );
+_run_app( 'MT::App::Search', { tag => 'rain', use_text_filters => 0 } );
 cmp_bag( $filters{tag}, [2], "Tag filter works as expected" );
+is( $search, '', "Tag filter does not set search string" );
 
-_run_app( 'MT::App::Search', { searchall => 1, category => 'subfoo' } );
+MT::Session->remove( { kind => 'CS' } );
+_run_app(
+    'MT::App::Search',
+    {
+        searchall        => 1,
+        category         => 'subfoo',
+        blog_id          => 1,
+        use_text_filters => 0
+    }
+);
 cmp_bag( $filters{category}, [3], "Category filter works as expected" );
+is( $search, '', "Category filter does not set search string" );
+
+MT::Session->remove( { kind => 'CS' } );
+_run_app( 'MT::App::Search',
+    { searchall => 1, author => 'Bob D', use_text_filters => 1 } );
+ok( !$filters{author_id}, "Author filter works as expected" );
+is( $search, 'entry_author_id_3', "Author filter does not set search string" );
+
+MT::Session->remove( { kind => 'CS' } );
+_run_app( 'MT::App::Search', { tag => 'rain', use_text_filters => 1 } );
+ok( !$filters{tag}, "Tag filter works as expected" );
+is( $search, 'entry_tag_2', "Tag filter does not set search string" );
+
+MT::Session->remove( { kind => 'CS' } );
+_run_app(
+    'MT::App::Search',
+    {
+        searchall        => 1,
+        category         => 'subfoo',
+        blog_id          => 1,
+        use_text_filters => 1
+    }
+);
+ok( !$filters{category}, "Category filter works as expected" );
+like(
+    $search,
+    qr/^(?:entry_(?:category_3|blog_id_1)\s*){2}$/,
+    "Category filter does not set search string"
+);
 
 MT::Session->remove( { kind => 'CS' } );
 MT::Object->driver->clear_cache;
