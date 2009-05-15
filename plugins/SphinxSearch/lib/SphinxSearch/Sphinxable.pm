@@ -79,25 +79,42 @@ sub sphinx_search {
     require SphinxSearch::Util;
     my $spx = SphinxSearch::Util::_get_sphinx();
 
+    my $text_filters = $params{TextFilters};
     if ( exists $params{Filters} ) {
         foreach my $filter ( keys %{ $params{Filters} } ) {
             next
               unless ( ref( $params{Filters}->{$filter} ) eq 'ARRAY'
                 && scalar @{ $params{Filters}{$filter} } );
-            $spx->SetFilter( $filter, $params{Filters}{$filter} );
+            if ( !$text_filters ) {
+                $spx->SetFilter( $filter, $params{Filters}{$filter} );
+            }
+            else {
+                $search = join( ' ',
+                    ( $search ? ($search) : () ),
+                    map { join( '_', $datasource, $filter, $_ ) }
+                      @{ $params{Filters}{$filter} } );
+            }
         }
     }
 
     if ( exists $params{SFilters} ) {
         require String::CRC32;
         foreach my $filter ( keys %{ $params{SFilters} } ) {
-            $spx->SetFilter(
-                $filter . '_crc32',
-                [
-                    map { String::CRC32::crc32($_) }
-                      @{ $params{SFilters}{$filter} }
-                ]
-            );
+            if ( !$text_filters ) {
+                $spx->SetFilter(
+                    $filter . '_crc32',
+                    [
+                        map { String::CRC32::crc32($_) }
+                          @{ $params{SFilters}{$filter} }
+                    ]
+                );
+            }
+            else {
+                $search = join( ' ',
+                    ( $search ? ($search) : () ),
+                    map { join( '_', $datasource, $filter, $_ ) }
+                      @{ $params{SFilters}{$filter} } );
+            }
         }
     }
 
