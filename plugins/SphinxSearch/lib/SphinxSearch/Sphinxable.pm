@@ -85,14 +85,35 @@ sub sphinx_search {
             next
               unless ( ref( $params{Filters}->{$filter} ) eq 'ARRAY'
                 && scalar @{ $params{Filters}{$filter} } );
-            if ( !$text_filters ) {
-                $spx->SetFilter( $filter, $params{Filters}{$filter} );
+            if ($text_filters) {
+                my $filter_str;
+                if (
+                    scalar @{
+                        $params{Filters}{$filter};
+                    } == 1
+                  )
+                {
+                    $filter_str = join( '_',
+                        $datasource, $filter, $params{Filters}{$filter}->[0] );
+                }
+                elsif ( $text_filters > 1
+                    && scalar @{ $params{Filters}{$filter} } > 1 )
+                {
+                    $filter_str = '('
+                      . join( '|',
+                        map { join( '_', $datasource, $filter, $_ ) }
+                          @{ $params{Filters}{$filter} } )
+                      . ')';
+                }
+                else {
+                    $spx->SetFilter( $filter, $params{Filters}{$filter} );
+                }
+
+                $search = join( ' ', ( $search ? ($search) : () ), $filter_str )
+                  if ($filter_str);
             }
             else {
-                $search = join( ' ',
-                    ( $search ? ($search) : () ),
-                    map { join( '_', $datasource, $filter, $_ ) }
-                      @{ $params{Filters}{$filter} } );
+                $spx->SetFilter( $filter, $params{Filters}{$filter} );
             }
         }
     }
@@ -100,7 +121,40 @@ sub sphinx_search {
     if ( exists $params{SFilters} ) {
         require String::CRC32;
         foreach my $filter ( keys %{ $params{SFilters} } ) {
-            if ( !$text_filters ) {
+            if ($text_filters) {
+                my $filter_str;
+                if (
+                    scalar @{
+                        $params{SFilters}{$filter};
+                    } == 1
+                  )
+                {
+                    $filter_str = join( '_',
+                        $datasource, $filter, $params{SFilters}{$filter}->[0] );
+                }
+                elsif ( $text_filters > 1
+                    && scalar @{ $params{SFilters}{$filter} } > 1 )
+                {
+                    $filter_str = '('
+                      . join( '|',
+                        map { join( '_', $datasource, $filter, $_ ) }
+                          @{ $params{SFilters}{$filter} } )
+                      . ')';
+                }
+                else {
+                    $spx->SetFilter(
+                        $filter . '_crc32',
+                        [
+                            map { String::CRC32::crc32($_) }
+                              @{ $params{SFilters}{$filter} }
+                        ]
+                    );
+                }
+
+                $search = join( ' ', ( $search ? ($search) : () ), $filter_str )
+                  if ($filter_str);
+            }
+            else {
                 $spx->SetFilter(
                     $filter . '_crc32',
                     [
@@ -108,12 +162,6 @@ sub sphinx_search {
                           @{ $params{SFilters}{$filter} }
                     ]
                 );
-            }
-            else {
-                $search = join( ' ',
-                    ( $search ? ($search) : () ),
-                    map { join( '_', $datasource, $filter, $_ ) }
-                      @{ $params{SFilters}{$filter} } );
             }
         }
     }
@@ -145,11 +193,12 @@ sub sphinx_search {
 
     if ( exists $params{Match} ) {
         my $match = $params{Match};
-            $match eq 'extended' ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
-          : $match eq 'boolean'  ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
-          : $match eq 'phrase'   ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
-          : $match eq 'any'      ? $spx->SetMatchMode(SPH_MATCH_ANY)
-          :                        $spx->SetMatchMode(SPH_MATCH_ALL);
+        $match eq 'extended'
+          || $text_filters > 1 ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
+          : $match eq 'boolean' ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
+          : $match eq 'phrase'  ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
+          : $match eq 'any'     ? $spx->SetMatchMode(SPH_MATCH_ANY)
+          :                       $spx->SetMatchMode(SPH_MATCH_ALL);
     }
     else {
         $spx->SetMatchMode(SPH_MATCH_ALL);

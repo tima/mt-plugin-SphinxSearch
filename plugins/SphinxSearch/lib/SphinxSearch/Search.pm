@@ -285,12 +285,12 @@ sub _get_sphinx_results {
               $app->param("filter_$filter");
         }
     }
+
+    my $sfilters = {};
     for
       my $filter ( map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params )
     {
-        require String::CRC32;
-        $filters->{ $filter . '_crc32' } =
-          [ String::CRC32::crc32( $app->param("sfilter_$filter") ) ];
+        $sfilters->{ $filter } = [ $app->param("sfilter_$filter") ];
         $filter_stash->{"sphinx_filter_$filter"} =
           $app->param("sfilter_$filter");
     }
@@ -299,6 +299,11 @@ sub _get_sphinx_results {
         for my $key ( sort keys %$filters ) {
             warn "SPHINX FILTER: $key => "
               . join( ', ', @{ $filters->{$key} } );
+        }
+
+        for my $key ( sort keys %$sfilters ) {
+            warn "SPHINX STRING FILTER: $key => "
+              . join( ', ', @{ $sfilters->{$key} } );
         }
 
         for my $key ( sort keys %$range_filters ) {
@@ -332,6 +337,7 @@ sub _get_sphinx_results {
         $app->{search_string},
         Indexes      => \@indexes,
         Filters      => $filters,
+        SFilters     => $sfilters,
         RangeFilters => $range_filters,
         Sort         => $sort_mode,
         Offset       => $offset,
