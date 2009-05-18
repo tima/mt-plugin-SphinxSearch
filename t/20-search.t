@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 20;
+use Test::More tests => 28;
 use Test::Deep;
 
 require MT::Template;
@@ -153,12 +153,12 @@ MT::Session->remove( { kind => 'CS' } );
 _run_app( 'MT::App::Search',
     { searchall => 1, author => 'Bob D', use_text_filters => 1 } );
 ok( !$filters{author_id}, "Author filter works as expected" );
-is( $search, 'entry_author_id_3', "Author filter does not set search string" );
+is( $search, 'entry_author_id_3', "Author filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 _run_app( 'MT::App::Search', { tag => 'rain', use_text_filters => 1 } );
 ok( !$filters{tag}, "Tag filter works as expected" );
-is( $search, 'entry_tag_2', "Tag filter does not set search string" );
+is( $search, 'entry_tag_2', "Tag filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 _run_app(
@@ -174,8 +174,61 @@ ok( !$filters{category}, "Category filter works as expected" );
 like(
     $search,
     qr/^(?:entry_(?:category_3|blog_id_1)\s*){2}$/,
+    "Category filter sets search string"
+);
+
+print "ABOUT TO RUN THE TF2 test!\n";
+
+require MT::Object;
+MT::Object->driver->clear_cache;
+MT::Session->remove( { kind => 'CS' } );
+_run_app(
+    'MT::App::Search',
+    {
+        searchall        => 1,
+        category         => 'foo,subfoo',
+        blog_id          => 1,
+        use_text_filters => 1
+    }
+);
+cmp_bag( $filters{category}, [1, 3], "Category filter works as expected" );
+ok (!$filters{blog_id}, "Blog filter works as expected");
+unlike(
+    $search,
+    qr/\Q(entry_category_1|entry_category_3)\E/,
     "Category filter does not set search string"
 );
+
+like(
+    $search,
+    qr/entry_blog_id_1/,
+    "Blog filter sets search string"
+);
+
+MT::Session->remove( { kind => 'CS' } );
+my $a = _run_app(
+    'MT::App::Search',
+    {
+        searchall        => 1,
+        category         => 'foo,subfoo',
+        blog_id          => 1,
+        use_text_filters => 2
+    }
+);
+
+ok( !$filters{category}, "Category filter works as expected" );
+ok (!$filters{blog_id}, "Blog filter works as expected");
+like(
+    $search,
+    qr/\Q(entry_category_1|entry_category_3)\E/,
+    "Category filter sets search string"
+);
+like(
+    $search,
+    qr/entry_blog_id_1/,
+    "Blog filter sets search string"
+);
+
 
 MT::Session->remove( { kind => 'CS' } );
 MT::Object->driver->clear_cache;
