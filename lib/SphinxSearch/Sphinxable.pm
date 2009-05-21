@@ -252,20 +252,19 @@ sub sphinx_search {
         return ();
     }
 
-    my @result_objs = ();
-    my $meth        = $indexes{$datasource}->{id_to_obj}
-      or die "No id_to_obj method for $datasource";
+    my $meth        = $indexes{$datasource}->{id_to_obj};
+    my $multi_meth  = $indexes{$datasource}->{ids_to_objs}
+      or die "No ids_to_objs method for $datasource";
     my $i = 0;
-    foreach my $match ( @{ $results->{matches} } ) {
-        my $id = $match->{doc};
-        my $o = $meth->($id) or next;
-        $o->{__sphinx_result_index} = sprintf( "%04d", $i++ );
-        push @result_objs, $o;
-    }
+    
+    my @ids = map { $_->{doc} } @{$results->{matches}};
+    my @objs = $meth ? ( map { $meth->($_) } @ids ) : ( $multi_meth->(@ids) );
+    
+    $_->{__sphinx_result_index} = sprintf( "%04d", $i++) foreach (@objs);
 
-    return @result_objs if wantarray;
+    return @objs if wantarray;
     return {
-        result_objs   => [@result_objs],
+        result_objs   => [@objs],
         query_results => $results,
     };
 
@@ -396,8 +395,10 @@ sub sphinx_init {
         }
     }
 
-    $index_hash->{id_to_obj} = $params{id_to_obj}
-      || sub { $class->load( $_[0] ) };
+    # only explicit id_to_obj methods will be respected
+    $index_hash->{id_to_obj} = $params{id_to_obj};
+      # || sub { $class->load( $_[0] ) };
+    $index_hash->{ids_to_objs} = $params{ids_to_objs} || sub { @{$class->lookup_multi (\@_)} };
     $indexes->{$index_name} = $index_hash;
 }
 
