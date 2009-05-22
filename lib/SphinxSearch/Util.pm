@@ -27,13 +27,13 @@ sub _get_sphinx {
 
     if ( !( $host && $port ) ) {
         my $plugin = MT->component('sphinxsearch');
-
-        $spx->SetServer(
-            ( $host || $plugin->get_config_value( 'searchd_host', 'system' ) ),
-            ( $port || $plugin->get_config_value( 'searchd_port', 'system' ) ),
-        );
-        MT::Request->instance->stash( 'sphinx_obj', $spx );
+        $host = $plugin->get_config_value( 'searchd_host', 'system' )
+          if ( !$host );
+        $port = $plugin->get_config_value( 'searchd_port', 'system' )
+          if ( !$port );
     }
+    $spx->SetServer( $host, $port );
+    MT::Request->instance->stash( 'sphinx_obj', $spx );
 
     return $spx;
 }
