@@ -2,13 +2,19 @@ package Sphinx::Search;
 
 use warnings;
 use strict;
+
+use base 'Exporter';
+
 use Carp;
 use Socket;
 use Config;
 use Math::BigInt;
-use base 'Exporter';
-use Fcntl qw(:DEFAULT);
-use Errno;
+use IO::Socket::INET;
+use IO::Socket::UNIX;
+use Encode qw/encode_utf8 decode_utf8/;
+
+my $is_native64 = $Config{longsize} == 8 || defined $Config{use64bitint} || defined $Config{use64bitall};
+    
 
 =head1 NAME
 
@@ -18,11 +24,13 @@ Sphinx::Search - Sphinx search engine API Perl client
 
 Please note that you *MUST* install a version which is compatible with your version of Sphinx.
 
-This version is 0.12
+Use version 0.22 for Sphinx 0.9.9-rc2 and later (Please read the Compatibility Note under L<SetEncoders> regarding encoding changes)
 
-Use version 0.12 for Sphinx 0.9.8 and later
+Use version 0.15 for Sphinx 0.9.9-svn-r1674
 
-Use version 0.11 for Sphinx 0.9.8-rc1 and later
+Use version 0.12 for Sphinx 0.9.8
+
+Use version 0.11 for Sphinx 0.9.8-rc1
 
 Use version 0.10 for Sphinx 0.9.8-svn-r1112
 
@@ -38,7 +46,7 @@ Use version 0.02 for Sphinx 0.9.8-cvs-20070818
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.22';
 
 =head1 SYNOPSIS
 
@@ -73,12 +81,15 @@ use constant SEARCHD_COMMAND_SEARCH	=> 0;
 use constant SEARCHD_COMMAND_EXCERPT	=> 1;
 use constant SEARCHD_COMMAND_UPDATE	=> 2;
 use constant SEARCHD_COMMAND_KEYWORDS	=> 3;
+use constant SEARCHD_COMMAND_PERSIST	=> 4;
+use constant SEARCHD_COMMAND_STATUS	=> 5;
 
 # current client-side command implementation versions
-use constant VER_COMMAND_SEARCH		=> 0x113;
+use constant VER_COMMAND_SEARCH		=> 0x116;
 use constant VER_COMMAND_EXCERPT	=> 0x100;
-use constant VER_COMMAND_UPDATE	        => 0x101;
+use constant VER_COMMAND_UPDATE	        => 0x102;
 use constant VER_COMMAND_KEYWORDS       => 0x100;
+use constant VER_COMMAND_STATUS         => 0x100;
 
 # known searchd status codes
 use constant SEARCHD_OK			=> 0;
@@ -100,6 +111,8 @@ use constant SPH_RANK_PROXIMITY_BM25    => 0; # default mode, phrase proximity m
 use constant SPH_RANK_BM25              => 1; # statistical mode, BM25 ranking only (faster but worse quality)
 use constant SPH_RANK_NONE              => 2; # no ranking, all matches get a weight of 1
 use constant SPH_RANK_WORDCOUNT         => 3; # simple word-count weighting, rank is a weighted sum of per-field keyword occurence counts
+use constant SPH_RANK_PROXIMITY         => 4;
+use constant SPH_RANK_MATCHANY          => 5;
 
 # known sort modes
 use constant SPH_SORT_RELEVANCE		=> 0;
@@ -120,6 +133,7 @@ use constant SPH_ATTR_TIMESTAMP		=> 2;
 use constant SPH_ATTR_ORDINAL		=> 3;
 use constant SPH_ATTR_BOOL		=> 4;
 use constant SPH_ATTR_FLOAT		=> 5;
+use constant SPH_ATTR_BIGINT		=> 6;
 use constant SPH_ATTR_MULTI		=> 0x40000000;
 
 # known grouping functions
@@ -132,6 +146,86 @@ use constant SPH_GROUPBY_ATTRPAIR	=> 5;
 
 # Floating point number matching expression
 my $num_re = qr/^-?\d*\.?\d*(?:[eE][+-]?\d+)?$/;
+
+# portably pack numeric to 64 signed bits, network order
+sub _sphPackI64 {
+    my $self = shift;
+    my $v = shift;
+
+    # x64 route
+    my $i = $is_native64 ? int($v) : Math::BigInt->new("$v");
+    return pack ( "NN", $i>>32, $i & 4294967295 );
+}
+
+# portably pack numeric to 64 unsigned bits, network order
+sub _sphPackU64 {
+    my $self = shift;
+    my $v = shift;
+
+    my $i = $is_native64 ? int($v) : Math::BigInt->new("$v");
+    return pack ( "NN", $i>>32, $i & 4294967295 );
+}
+
+sub _sphPackI64array {
+    my $self = shift;
+    my $values = shift || [];
+
+    my $s = pack("N", scalar @$values);
+    $s .= $self->_sphPackI64($_) for @$values;
+    return $s;
+}
+
+# portably unpack 64 unsigned bits, network order to numeric
+sub _sphUnpackU64 
+{
+    my $self = shift;
+    my $v = shift;
+
+    my ($h,$l) = unpack ( "N*N*", $v );
+
+    # x64 route
+    return ($h<<32) + $l if $is_native64;
+
+    # x32 route, BigInt
+    $h = Math::BigInt->new($h);
+    $h->blsft(32)->badd($l);
+    
+    return $h->bstr;
+}
+
+# portably unpack 64 signed bits, network order to numeric
+sub _sphUnpackI64 
+{
+    my $self = shift;
+    my $v = shift;
+
+    my ($h,$l) = unpack ( "N*N*", $v );
+
+    my $neg = ($h & 0x80000000) ? 1 : 0;
+
+    # x64 route
+    if ( $is_native64 ) {
+	return -(~(($h<<32) + $l) + 1) if $neg;
+	return ($h<<32) + $l;
+    }
+
+    # x32 route, BigInt
+    if ($neg) {
+	$h = ~$h;
+	$l = ~$l;
+    }
+
+    my $x = Math::BigInt->new($h);
+    $x->blsft(32)->badd($l);
+    $x->binc()->bneg() if $neg;
+
+    return $x->bstr;
+}
+
+
+
+
+
 
 =head1 CONSTRUCTOR
 
@@ -168,6 +262,8 @@ sub new {
 	# per=client-object settings
 	_host		=> 'localhost',
 	_port		=> 3312,
+	_path           => undef,
+	_socket         => undef,
 
 	# per-query settings
 	_offset		=> 0,
@@ -177,7 +273,7 @@ sub new {
 	_sort		=> SPH_SORT_RELEVANCE,
 	_sortby		=> "",
 	_min_id		=> 0,
-	_max_id		=> 0xFFFFFFFF,
+	_max_id		=> 0,
 	_filters	=> [],
 	_groupby	=> "",
 	_groupdistinct	=> "",
@@ -192,24 +288,26 @@ sub new {
 	_ranker         => SPH_RANK_PROXIMITY_BM25,
 	_maxquerytime   => 0,
 	_fieldweights   => {},
+	_overrides      => {},
+	_select         => q{*},
 
 	# per-reply fields (for single-query case)
 	_error		=> '',
 	_warning	=> '',
+	_connerror      => '',
 	
 	# request storage (for multi-query case)
 	_reqs           => [],
-
 	_timeout        => 0,
-	_connection     => undef,
-	_persistent_connection => 0,
-	_longsize      => $Config{longsize},
+
+	_string_encoder => \&encode_utf8,
+	_string_decoder => \&decode_utf8,
     };
     bless $self, ref($class) || $class;
 
     # These options are supported in the constructor, but not recommended 
     # since there is no validation.  Use the Set* methods instead.
-    my %legal_opts = map { $_ => 1 } qw/host port offset limit mode weights sort sortby groupby groupbyfunc maxmatches cutoff retrycount retrydelay log debug/;
+    my %legal_opts = map { $_ => 1 } qw/host port offset limit mode weights sort sortby groupby groupbyfunc maxmatches cutoff retrycount retrydelay log debug string_encoder string_decoder/;
     for my $opt (keys %$options) {
 	$self->{'_' . $opt} = $options->{$opt} if $legal_opts{$opt};
     }
@@ -218,6 +316,7 @@ sub new {
 
     return $self;
 }
+
 
 =head1 METHODS
 
@@ -263,133 +362,188 @@ sub GetLastWarning {
 	return $self->{_warning};
 }
 
-# Persistent connections not currently supported by searchd.
-#=head2 SetPersistentConnection
-#
-#    $sphinx->SetPersistentConnection(1);
-#    $sphinx->SetPersistentConnection(0);
-#
-#Enable/disable persistent connections.
-#
-#When enabled, the connection to the searchd server is kept open; you must close
-#it manually using Disconnect when you have finished with it.  This is the most
-#efficient way to reach the search server if you are performing multiple queries
-#with the one Sphinx::Search instance, such as in a web application server
-#environment.
-#
-#When disabled, the connection is established and automatically disconnected on
-#each query.  This is useful for CGI type environments where you have only one
-#request for the lifetime of the process.
-#
-#=cut
-#
-sub _SetPersistentConnection {
+
+=head2 IsConnectError 
+
+Check connection error flag (to differentiate between network connection errors
+and bad responses).  Returns true value on connection error.
+
+=cut
+
+sub IsConnectError {
+    return shift->{_connerror};
+}
+
+=head2 SetEncoders
+
+    $sph->SetEncoders(\&encode_function, \&decode_function)
+
+COMPATIBILITY NOTE: SetEncoders() was introduced in version 0.17.
+Prior to that, all strings were considered to be sequences of bytes
+which may have led to issues with multi-byte characters.  If you were
+previously encoding/decoding strings external to Sphinx::Search, you
+will need to disable encoding/decoding by setting Sphinx::Search to
+use raw values as explained below (or modify your code and let
+Sphinx::Search do the recoding).
+
+Set the string encoder/decoder functions for transferring strings
+between perl and Sphinx.  The encoder should take the perl internal
+representation and convert to the bytestream that searchd expects, and
+the decoder should take the bytestream returned by searchd and convert to
+perl format.
+
+The searchd format will depend on the 'charset_type' index setting in
+the Sphinx configuration file.
+
+The coders default to encode_utf8 and decode_utf8 respectively, which
+are compatible with the 'utf8' charset_type.
+
+If either the encoder or decoder functions are left undefined in the
+call to SetEncoders, they return to their default values.  
+
+If you wish to send raw values (no encoding/decoding), supply a
+function that simply returns its argument, e.g. 
+
+    $sph->SetEncoders( sub { shift }, sub { shift });
+
+Returns $sph.
+
+=cut
+
+sub SetEncoders {
     my $self = shift;
-    $self->{_persistent_connection} = shift;
+    my $encoder = shift;
+    my $decoder = shift;
+
+    $self->{_string_encoder} = $encoder ? $encoder : \&encode_utf8;
+    $self->{_string_decoder} = $decoder ? $decoder : \&decode_utf8;
+	
     return $self;
 }
-#
-#=head2 Disconnect
-#
-#    $sph->Disconnect;
-#
-#Disconnect from the search server.  See L<SetPersistentConnection> for a description.
-#
-#=cut
-#
-sub _Disconnect {
-    my $self = shift;
 
-    if ($self->{_connection}) {
-	close($self->{_connection});
-	$self->{_connection} = undef;
+=head2 SetServer
+
+    $sph->SetServer($host, $port);
+    $sph->SetServer($path, $port);
+
+In the first form, sets the host (string) and port (integer) details for the
+searchd server using a network (INET) socket.
+
+In the second form, where $path is a local filesystem path (optionally prefixed
+by 'unix://'), sets the client to access the searchd server via a local (UNIX
+domain) socket at the specified path.
+
+Returns $sph.
+
+=cut
+
+sub SetServer {
+    my $self = shift;
+    my $host = shift;
+    my $port = shift;
+
+    croak("host is not defined") unless defined($host);
+    $self->{_path} = $host, return if substr($host, 0, 1) eq '/';
+    $self->{_path} = substr($host, 7), return if substr($host, 0, 7) eq 'unix://';
+	
+    croak("port is not an integer") unless defined($port) && $port =~ m/^\d+$/o;
+
+    $self->{_host} = $host;
+    $self->{_port} = $port;
+    $self->{_path} = undef;
+
+    return $self;
+}
+
+=head2 SetConnectTimeout
+
+    $sph->SetConnectTimeout($timeout)
+
+Set server connection timeout (in seconds).
+
+Returns $sph.
+
+=cut
+
+sub SetConnectTimeout {
+    my $self = shift;
+    my $timeout = shift;
+
+    croak("timeout is not numeric") unless ($timeout =~  m/$num_re/);
+    $self->{_timeout} = $timeout;
+}
+
+sub _Send {
+    my $self = shift;
+    my $fp = shift;
+    my $data = shift;
+
+    $self->{_log}->debug("Writing to socket") if $self->{_debug};
+    $fp->write($data); return 1;
+    if ($fp->eof || ! $fp->write($data)) {
+	$self->_Error("connection unexpectedly closed (timed out?): $!");
+	$self->{_connerror} = 1;
+	return 0;
     }
-    return $self;
+    return 1;
 }
-
-
-#-------------------------------------------------------------
 
 # connect to searchd server
 
 sub _Connect {
 	my $self = shift;
 	
+	return $self->{_socket} if $self->{_socket};
+
 	my $debug = $self->{_debug};
-
-	$self->{_log}->debug("Connecting to $self->{_host}:$self->{_port}") if $debug;
-
-	return $self->{_connection} if $self->{_connection};
+	my $str_dest = $self->{_path} ? 'unix://' . $self->{_path} : "$self->{_host}:$self->{_port}";
+	$self->{_log}->debug("Connecting to $str_dest") if $debug;
 
 	# connect socket
-	my $fp;
-	socket($fp, PF_INET, SOCK_STREAM, getprotobyname('tcp')) || Carp::croak("socket: ".$!);
-	binmode($fp, ':bytes');
-	my $dest = sockaddr_in($self->{_port}, inet_aton($self->{_host}));
+	$self->{_connerror} = q{};
 
-	if ($self->{_timeout}) {
-	    my $flags = fcntl($fp, F_GETFL, 0) or do {
-		$self->_Error("Can't get flags for socket: $!");
-		return 0;
-	    };
-	    fcntl($fp, F_SETFL, $flags | O_NONBLOCK) or do {
-		$self->_Error("Can't set flags for socket: $!");
-		return 0;
-	    };
-		
-	    if (! connect($fp, $dest)) {
-		if (! $!{EINPROGRESS}) {
-		    $self->_Error("connect to {$self->{_host}}:{$self->{_port}} failed: $!");
-		    return 0;
-		}
-		my $count = 0;
-		while ($count < 2) { # until timeout or data received
-		    my $vec = '';
-		    vec($vec, fileno($fp), 1) = 1;
-		    my $n = select($vec, undef, undef, $self->{_timeout});
-		    if ($n < 0) {
-			$self->_Error("connection to {$self->{_host}}:{$self->{_port}} failed: $!");
-			return 0;
-		    }
-		    elsif ($n == 0) {
-			$self->_Error("connection to {$self->{_host}}:{$self->{_port}} timed out");
-			return 0;
-		    }
-		    else {
-			my $tmpbuf = 0;
-			my $ret = recv($fp, $tmpbuf, 4, MSG_PEEK);
-			last if $tmpbuf;
-		    }
-		    $count++;
-		}
-	    }
-	    fcntl($fp, F_SETFL, $flags) or do {
-		$self->_Error("Can't set flags for socket: $!");
-		return 0;
-	    };
+	my $fp;
+	my %params = (); # ( Blocking => 0 );
+	$params{Timeout} = $self->{_timeout} if $self->{_timeout};
+	if ($self->{_path}) {
+	    $fp = IO::Socket::UNIX->new( Peer => $self->{_path},
+					 %params,
+					 );
 	}
 	else {
-	    connect($fp, $dest) or do {
-		$self->_Error("connection to {$self->{_host}}:{$self->{_port}} failed: $!");
-		return 0;
-	    };
+	    $fp = IO::Socket::INET->new( PeerPort => $self->{_port},
+					 PeerAddr => $self->{_host},
+					 Proto => 'tcp',
+					 %params,
+					 );
 	}
+	if (! $fp) {
+	    $self->_Error("Failed to open connection to $str_dest: $!");
+	    $self->{_connerror} = 1;
+	    return 0;
+	}
+	binmode($fp, ':bytes');
+
 	# check version
 	my $buf = '';
-	croak("recv: ".$!) unless defined recv($fp, $buf, 4, 0);
+	$fp->read($buf, 4) or do {
+	    $self->_Error("Failed on initial read from $str_dest: $!");
+	    $self->{_connerror} = 1;
+	    return 0;
+	};
 	my $v = unpack("N*", $buf);
 	$v = int($v);
-	if($v < 1) {
-		close($fp) || croak("close: $!");
-		$self->_Error("expected searchd protocol version 1+, got version '$v'");
+	$self->{_log}->debug("Got version $v from searchd") if $debug;
+	if ($v < 1) {
+	    close($fp);
+	    $self->_Error("expected searchd protocol version 1+, got version '$v'");
+	    return 0;
 	}
 
 	$self->{_log}->debug("Sending version") if $debug;
 
 	# All ok, send my version
-	send($fp, pack("N", 1),0);
-
-	$self->{_connection} = $fp;
+	$self->_Send($fp, pack("N", 1)) or return 0;
 
 	$self->{_log}->debug("Connection complete") if $debug;
 
@@ -405,19 +559,27 @@ sub _GetResponse {
 	my $client_ver = shift;
 
 	my $header;
-	croak("recv: ".$!) unless defined recv($fp, $header, 8, 0);
+	defined($fp->read($header, 8, 0)) or do {
+	    $self->_Error("read failed: $!");
+	    return 0;
+	};
 
 	my ($status, $ver, $len ) = unpack("n2N", $header);
-        my ($chunk, $response);
-	while(defined($chunk = <$fp>)) {
-		$response .= $chunk;
+        my $response = q{};
+	my $lasterror = q{};
+	my $lentotal = 0;
+	while (my $rlen = $fp->read(my $chunk, $len)) {
+	    $lasterror = $!, last if $rlen < 0;
+	    $response .= $chunk;
+	    $lentotal += $rlen;
+	    last if $lentotal >= $len;
 	}
-        $self->_Disconnect unless $self->{_persistent_connection};
+        close($fp) unless $self->{_socket};
 
 	# check response
-        if ( !$response || length($response) != $len ) {
+        if ( length($response) != $len ) {
 		$self->_Error( $len 
-			? "failed to read searchd response (status=$status, ver=$ver, len=$len, read=". length($response) . ")"
+			? "failed to read searchd response (status=$status, ver=$ver, len=$len, read=". length($response) . ", last error=$lasterror)"
        			: "received zero-sized searchd response");
 		return 0;
 	}
@@ -447,85 +609,6 @@ sub _GetResponse {
 				      $ver>>8, $ver&0xff, $client_ver>>8, $client_ver&0xff ));
 	}
         return $response;
-}
-
-# portably pack numeric to 64 unsigned bits, network order
-sub _sphPack64 {
-    my $self = shift;
-    my $v = shift;
-
-    # x64 route
-    if ( $self->{_longsize} >= 8 ) {
-	my $i = int($v);
-	return pack ( "NN", $i>>32, $i & 4294967295 );
-    }
-
-    # x32 route, BigInt
-    my $x = "4294967296";
-    my $vb = Math::BigInt->new($v);
-    my $l = $vb->copy->band ( 4294967295 );
-    my $h = $vb->copy->brsft ( 32 );
-    return pack ( "NN", $h, $l );
-}
-
-
-# portably unpack 64 unsigned bits, network order to numeric
-sub _sphUnpack64 
-{
-    my $self = shift;
-    my $v = shift;
-
-    my ($h,$l) = unpack ( "N*N*", $v );
-
-    # x64 route
-    return ($h<<32) + $l if ( $self->{_longsize} >= 8 );
-
-    # x32 route, BigInt
-    $h = Math::BigInt->new($h);
-    $h->blsft(32)->badd($l);
-    
-    return $h->bstr;
-}
-
-
-
-=head2 SetServer
-
-    $sph->SetServer($host, $port);
-
-Set the host (string) and port (integer) details for the searchd server.  Returns $sph.
-
-=cut
-
-sub SetServer {
-    my $self = shift;
-    my $host = shift;
-    my $port = shift;
-
-    croak("host is not defined") unless defined($host);
-    croak("port is not an integer") unless defined($port) && $port =~ m/^\d+$/o;
-
-    $self->{_host} = $host;
-    $self->{_port} = $port;
-    return $self;
-}
-
-=head2 SetConnectTimeout
-
-    $sph->SetConnectTimeout($timeout)
-
-Set server connection timeout (in seconds).
-
-Returns $sph.
-
-=cut
-
-sub SetConnectTimeout {
-    my $self = shift;
-    my $timeout = shift;
-
-    croak("timeout is not numeric") unless ($timeout =~  m/$num_re/);
-    $self->{_timeout} = $timeout;
 }
 
 =head2 SetLimits
@@ -665,7 +748,8 @@ sub SetRankingMode {
     croak("Unknown ranking mode: $ranker") unless ( $ranker==SPH_RANK_PROXIMITY_BM25
 						    || $ranker==SPH_RANK_BM25
 						    || $ranker==SPH_RANK_NONE
-						    || $ranker==SPH_RANK_WORDCOUNT );
+						    || $ranker==SPH_RANK_WORDCOUNT
+						    || $ranker==SPH_RANK_PROXIMITY );
 
     $self->{_ranker} = $ranker;
     return $self;
@@ -865,8 +949,6 @@ Sets the results to be filtered on a range of values for the given
 attribute. Only those records where $attr column value is between $min and $max
 (including $min and $max) will be returned.
 
-$min and $max must be integers.  Use L<SetFilterFloatRange> for floating point values.
-
 If 'exclude' is set, excludes results that fall within the given range.
 
 Returns $sph.
@@ -876,8 +958,8 @@ Returns $sph.
 sub SetFilterRange {
     my ($self, $attribute, $min, $max, $exclude) = @_;
     croak("attribute is not defined") unless (defined $attribute);
-    croak("min: $min is not an integer") unless ($min =~ /^-?\d+$/);
-    croak("max: $max is not an integer") unless ($max =~ /^-?\d+$/);
+    croak("min: $min is not an integer") unless ($min =~ m/$num_re/);
+    croak("max: $max is not an integer") unless ($max =~ m/$num_re/);
     croak("min value should be <= max") unless ($min <= $max);
 
     push(@{$self->{_filters}}, {
@@ -1098,6 +1180,49 @@ sub SetRetries {
     return $self;
 }
 
+=head2 SetOverride
+
+    $sph->SetOverride($attrname, $attrtype, $values);
+
+ Set attribute values override. There can be only one override per attribute.
+ $values must be a hash that maps document IDs to attribute values
+
+=cut
+
+sub SetOverride {
+    my $self = shift;
+    my $attrname = shift;
+    my $attrtype = shift;
+    my $values = shift;
+
+    croak("attribute name is not defined") unless defined $attrname;
+    croak("Uknown attribute type: $attrtype") unless ($attrtype == SPH_ATTR_INTEGER
+						      || $attrtype == SPH_ATTR_TIMESTAMP
+						      || $attrtype == SPH_ATTR_BOOL
+						      || $attrtype == SPH_ATTR_FLOAT
+						      || $attrtype == SPH_ATTR_BIGINT);
+    $self->{_overrides}->{$attrname} = { attr => $attrname,
+					 type => $attrtype,
+					 values => $values,
+				     };
+    
+    return $self;
+}
+
+
+=head2 SetSelect 
+
+    $sph->SetSelect($select)
+
+Set select list (attributes or expressions).  SQL-like syntax.
+
+=cut
+
+sub SetSelect {
+    my $self = shift;
+    $self->{_select} = shift;
+    return $self;
+}
 
 =head2 ResetFilters
 
@@ -1135,6 +1260,18 @@ sub ResetGroupBy {
     return $self;
 }
 
+=head2 ResetOverrides
+
+Clear all attribute value overrides (for multi-queries)
+
+=cut
+
+sub ResetOverrides {
+    my $self = shift;
+
+    $self->{_select} = undef;
+    return $self;
+}
 
 =head2 Query
 
@@ -1241,12 +1378,12 @@ sub AddQuery {
     my $req;
     $req = pack ( "NNNNN", $self->{_offset}, $self->{_limit}, $self->{_mode}, $self->{_ranker}, $self->{_sort} ); # mode and limits
     $req .= pack ( "N/a*", $self->{_sortby});
-    $req .= pack ( "N/a*", $query ); # query itself
+    $req .= pack ( "N/a*", $self->{_string_encoder}->($query) ); # query itself
     $req .= pack ( "N*", scalar(@{$self->{_weights}}), @{$self->{_weights}});
     $req .= pack ( "N/a*", $index); # indexes
     $req .= pack ( "N", 1) 
-	. $self->_sphPack64($self->{_min_id})
-	. $self->_sphPack64($self->{_max_id}); # id64 range
+	. $self->_sphPackU64($self->{_min_id})
+	. $self->_sphPackU64($self->{_max_id}); # id64 range
 
     # filters
     $req .= pack ( "N", scalar @{$self->{_filters}} );
@@ -1256,10 +1393,10 @@ sub AddQuery {
 
 	my $t = $filter->{type};
 	if ($t == SPH_FILTER_VALUES) {
-	    $req .= pack ( "N*", scalar(@{$filter->{values}}), @{$filter->{values}});
+	    $req .= $self->_sphPackI64array($filter->{values});
 	}
 	elsif ($t == SPH_FILTER_RANGE) {
-	    $req .= pack ( "NN", $filter->{min}, $filter->{max} );
+	    $req .= $self->_sphPackI64($filter->{min}) . $self->_sphPackI64($filter->{max});
 	}
 	elsif ($t == SPH_FILTER_FLOATRANGE) {
 	    $req .= _PackFloat ( $filter->{"min"} ) . _PackFloat ( $filter->{"max"} );
@@ -1301,6 +1438,31 @@ sub AddQuery {
     # comment
     $req .= pack ( "N/a*", $comment);
 
+    # attribute overrides
+    $req .= pack ( "N", scalar keys %{$self->{_overrides}} );
+    for my $entry (values %{$self->{_overrides}}) {
+	$req .= pack ("N/a*", $entry->{attr})
+	    . pack ("NN", $entry->{type}, scalar keys %{$entry->{values}});
+	for my $id (keys %{$entry->{values}}) {
+	    croak "Attribute value key is not numeric" unless $id =~ m/$num_re/;
+	    my $v = $entry->{values}->{$id};
+	    croak "Attribute value key is not numeric" unless $v =~ m/$num_re/;
+	    $req .= $self->_sphPackU64($id);
+	    if ($entry->{type} == SPH_ATTR_FLOAT) {
+		$req .= $self->_packfloat($v);
+	    }
+	    elsif ($entry->{type} == SPH_ATTR_BIGINT) {
+		$req .= $self->_sphPackI64($v);
+	    }
+	    else {
+		$req .= pack("N", $v);
+	    }
+	}
+    }
+    
+    # select list
+    $req .= pack("N/a*", $self->{_select} || '');
+
     push(@{$self->{_reqs}}, $req);
 
     return scalar $#{$self->{_reqs}};
@@ -1341,7 +1503,7 @@ sub RunQueries {
 	return;
     }
 
-    my $fp = $self->_Connect() or return;
+    my $fp = $self->_Connect() or do { $self->{_reqs} = []; return };
 
     ##################
     # send query, get response
@@ -1349,7 +1511,7 @@ sub RunQueries {
     my $nreqs = @{$self->{_reqs}};
     my $req = pack("Na*", $nreqs, join("", @{$self->{_reqs}}));
     $req = pack ( "nnN/a*", SEARCHD_COMMAND_SEARCH, VER_COMMAND_SEARCH, $req); # add header
-    send($fp, $req ,0);
+    $self->_Send($fp, $req);
 
     $self->{_reqs} = [];
 		   
@@ -1414,7 +1576,7 @@ sub RunQueries {
 	while ( $count-->0 && $p<$max ) {
 	    my $data = {};
 	    if ($id64) {
-		$data->{doc} = $self->_sphUnpack64(substr($response, $p, 8)); $p += 8;
+		$data->{doc} = $self->_sphUnpackU64(substr($response, $p, 8)); $p += 8;
 		$data->{weight} = unpack("N*", substr($response, $p, 4)); $p += 4;
 	    }
 	    else {
@@ -1422,6 +1584,10 @@ sub RunQueries {
 		$p += 8;
 	    }
 	    foreach my $attr (@attr_list) {
+		if ($attrs{$attr} == SPH_ATTR_BIGINT) {
+		    $data->{$attr} = $self->_sphUnpackI64(substr($response, $p, 8)); $p += 8;
+		    next;
+		}
 		if ($attrs{$attr} == SPH_ATTR_FLOAT) {
 		    my $uval = unpack( "N*", substr ( $response, $p, 4 ) ); $p += 4;
 		    $data->{$attr} = [ unpack("f*", pack("L", $uval)) ];
@@ -1450,7 +1616,7 @@ sub RunQueries {
 	while ( $words-->0 && $p < $max) {
 	    my $len = unpack ( "N*", substr ( $response, $p, 4 ) ); 
 	    $p += 4;
-	    my $word = substr ( $response, $p, $len ); 
+	    my $word = $self->{_string_decoder}->( substr ( $response, $p, $len ) ); 
 	    $p += $len;
 	    my ($docs, $hits) = unpack ("N*N*", substr($response, $p, 8));
 	    $p += 8;
@@ -1516,7 +1682,7 @@ A hash which contains additional optional highlighting parameters:
 
 Returns undef on failure.
 
-Returns an array of string excerpts on success.
+Returns an array ref of string excerpts on success.
 
 =cut
 
@@ -1556,8 +1722,8 @@ sub BuildExcerpts {
 	$flags |= 16 if ( $opts->{"weight_order"} );
 	$req = pack ( "NN", 0, $flags ); # mode=0, flags=$flags
 
-	$req .= pack ( "N", length($index) ) . $index; # req index
-	$req .= pack ( "N", length($words) ) . $words; # req words
+	$req .= pack ( "N/a*", $index ); # req index
+	$req .= pack ( "N/a*", $self->{_string_encoder}->($words)); # req words
 
 	# options
 	$req .= pack ( "N/a*", $opts->{"before_match"});
@@ -1569,8 +1735,8 @@ sub BuildExcerpts {
 	# documents
 	$req .= pack ( "N", scalar(@$docs) );
 	foreach my $doc (@$docs) {
-		croak('BuildExcepts: Found empty document in $docs') unless ($doc);
-		$req .= pack("N/a*", $doc);
+		croak('BuildExcerpts: Found empty document in $docs') unless ($doc);
+		$req .= pack("N/a*", $self->{_string_encoder}->($doc));
 	}
 
 	##########################
@@ -1578,10 +1744,10 @@ sub BuildExcerpts {
 	##########################
 
 	$req = pack ( "nnN/a*", SEARCHD_COMMAND_EXCERPT, VER_COMMAND_EXCERPT, $req); # add header
-	send($fp, $req ,0);
+	$self->_Send($fp, $req);
 	
 	my $response = $self->_GetResponse($fp, VER_COMMAND_EXCERPT);
-	return 0 unless ($response);
+	return unless $response;
 
 	my ($pos, $i) = 0;
 	my $res = [];	# Empty hash ref
@@ -1592,9 +1758,9 @@ sub BuildExcerpts {
 
                 if ( $pos+$len > $rlen ) {
 			$self->_Error("incomplete reply");
-			return 0;
+			return;
 		}
-		push(@$res, substr ( $response, $pos, $len ));
+		push(@$res, $self->{_string_decoder}->( substr ( $response, $pos, $len ) ));
 		$pos += $len;
         }
         return $res;
@@ -1637,16 +1803,16 @@ sub BuildKeywords {
     my $fp = $self->_Connect() or return;
 
     # v.1.0 req
-    my $req = pack("N/a*", $query);
+    my $req = pack("N/a*", $self->{_string_encoder}->($query) );
     $req .= pack("N/a*", $index);
-    $req .= pack("N", $hits);
+    $req .= pack("N", $self->{_string_encoder}->($hits) );
 
     ##################
     # send query, get response
     ##################
 
     $req = pack ( "nnN/a*", SEARCHD_COMMAND_KEYWORDS, VER_COMMAND_KEYWORDS, $req);
-    send($fp, $req, 0);
+    $self->_Send($fp, $req);
     my $response = $self->_GetResponse ( $fp, VER_COMMAND_KEYWORDS );
     return unless $response;
 
@@ -1663,10 +1829,10 @@ sub BuildKeywords {
     for (my $i=0; $i < $nwords; $i++ ) {
 	my $len = unpack("N", substr ( $response, $p, 4 ) ); $p += 4;
 
-	my $tokenized = $len ? substr ( $response, $p, $len ) : ""; $p += $len;
+	my $tokenized = $len ? $self->{_string_decoder}->( substr ( $response, $p, $len ) ) : ""; $p += $len;
 	$len = unpack("N", substr ( $response, $p, 4 ) ); $p += 4;
 
-	my $normalized = $len ? substr ( $response, $p, $len ) : ""; $p += $len;
+	my $normalized = $len ? $self->{_string_decoder}->( substr ( $response, $p, $len ) ) : ""; $p += $len;
 	my %data = ( tokenized => $tokenized, normalized => $normalized );
 	
 	if ($hits) {
@@ -1701,6 +1867,7 @@ sub EscapeString {
 =head2 UpdateAttributes
 
     $sph->UpdateAttributes($index, \@attrs, \%values);
+    $sph->UpdateAttributes($index, \@attrs, \%values, $mva);
 
 Update specified attributes on specified documents
 
@@ -1731,7 +1898,7 @@ Usage example:
 =cut
 
 sub UpdateAttributes  {
-    my ($self, $index, $attrs, $values ) = @_;
+    my ($self, $index, $attrs, $values, $mva ) = @_;
 
     croak("index is not defined") unless (defined $index);
     croak("attrs must be an array") unless ref($attrs) eq "ARRAY";
@@ -1746,7 +1913,15 @@ sub UpdateAttributes  {
 	croak("value entry must be an array") unless ref($entry) eq "ARRAY";
 	croak("size of values must match size of attrs") unless @$entry == @$attrs;
 	for my $v (@$entry) {
-	    croak("entry value $v is not an integer") unless ($v =~ /^(\d+)$/o);
+	    if ($mva) {
+		croak("multi-valued entry $v is not an array") unless ref($v) eq 'ARRAY';
+		for my $vv (@$v) {
+		    croak("array entry value $vv is not an integer") unless ($vv =~ /^(\d+)$/o);
+		}
+	    }
+	    else { 
+		croak("entry value $v is not an integer") unless ($v =~ /^(\d+)$/o);
+	    }
 	}
     }
 
@@ -1755,14 +1930,25 @@ sub UpdateAttributes  {
 
     $req .= pack ( "N", scalar @$attrs );
     for my $attr (@$attrs) {
-	$req .= pack ( "N/a*", $attr);
+	$req .= pack ( "N/a*", $attr)
+	    . pack("N", $mva ? 1 : 0);
     }
     $req .= pack ( "N", scalar keys %$values );
     foreach my $id (keys %$values) {
 	my $entry = $values->{$id};
-	$req .= $self->_sphPack64($id);
-	for my $v ( @$entry ) {
-	    $req .= pack ( "N", $v );
+	$req .= $self->_sphPackU64($id);
+	if ($mva) {
+	    for my $v ( @$entry ) {
+		$req .= pack ( "N", @$v );
+		for my $vv (@$v) {
+		    $req .= pack ("N", $vv);
+		}
+	    }
+	}
+	else {
+	    for my $v ( @$entry ) {
+		$req .= pack ( "N", $v );
+	    }
 	}
     }
 
@@ -1780,13 +1966,111 @@ sub UpdateAttributes  {
     return $updated;
 }
 
+=head2 Open
+
+    $sph->Open()
+
+Opens a persistent connection for subsequent queries.  
+
+To reduce the network connection overhead of making Sphinx queries, you can call
+$sph->Open(), then run any number of queries, and call $sph->Close() when
+finished.
+
+Returns 1 on success, 0 on failure.
+
+=cut 
+
+sub Open {
+    my $self = shift;
+
+    if ($self->{_socket}) {
+	$self->_Error("already connected");
+	return 0;
+    }
+    my $fp = $self->_Connect() or return 0;
+
+    my $req = pack("nnNN", SEARCHD_COMMAND_PERSIST, 0, 4, 1);
+    $self->_Send($fp, $req) or return 0;
+
+    $self->{_socket} = $fp;
+    return 1;
+}
+
+=head2 Close
+
+    $sph->Close()
+
+Closes a persistent connection.
+
+Returns 1 on success, 0 on failure.
+
+=cut 
+
+sub Close {
+    my $self = shift;
+
+    if (! $self->{_socket}) {
+	$self->_Error("not connected");
+	return 0;
+    }
+    
+    close($self->{_socket});
+    $self->{_socket} = undef;
+
+    return 1;
+}
+
+=head2 Status
+
+    $status = $sph->Status()
+
+Queries searchd status, and returns a hash of status variable name and value pairs. 
+
+Returns undef on failure.
+
+=cut
+
+sub Status {
+    
+    my $self = shift;
+
+    my $fp = $self->_Connect() or return;
+   
+    my $req = pack("nnNN", SEARCHD_COMMAND_STATUS, VER_COMMAND_STATUS, 4, 1 ); # len=4, body=1
+    $self->_Send($fp, $req) or return;
+    my $response = $self->_GetResponse ( $fp, VER_COMMAND_STATUS );
+    return unless $response;
+
+    my $p = 0;
+    my ($rows, $cols) = unpack("N*N*", substr ( $response, $p, 8 ) ); $p += 8;
+
+    return {} unless $rows && $cols;
+    my %res;
+    for (1 .. $rows ) {
+	my @entry;
+	for ( 1 .. $cols) {
+	    my $len = unpack("N*", substr ( $response, $p, 4 ) ); $p += 4;
+	    push(@entry, $len ? substr ( $response, $p, $len ) : ""); $p += $len;
+	}
+	if ($cols <= 2) {
+	    $res{$entry[0]} = $entry[1];
+	}
+	else {
+	    my $name = shift @entry;
+	    $res{$name} = \@entry;
+	}
+    }
+    return \%res;
+}
+    
+
 =head1 SEE ALSO
 
 L<http://www.sphinxsearch.com>
 
 =head1 NOTES
 
-There is a bundled Sphinx.pm in the contrib area of the Sphinx source
+There is (or was) a bundled Sphinx.pm in the contrib area of the Sphinx source
 distribution, which was used as the starting point of Sphinx::Search.
 Maintenance of that version appears to have lapsed at sphinx-0.9.7, so many of
 the newer API calls are not available there.  Sphinx::Search is mostly
