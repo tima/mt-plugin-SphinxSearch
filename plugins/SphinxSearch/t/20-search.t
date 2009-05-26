@@ -30,10 +30,11 @@ $tmpl->save or die $tmpl->errstr;
 my $p = MT->component('sphinxsearch');
 $p->set_config_value( 'searchd_port', '9999', 'system' );
 
+MT->instance->config->SphinxSearchdPort (9999);
 out_like(
     'MT::App::Search',
     { search => 'stuff', IncludeBlogs => 1 },
-qr/\QError querying searchd: connection to {localhost}:{9999} failed: Connection refused\E/,
+qr/\QError querying searchd: Failed to open connection to localhost:9999: Connection refused\E/,
     "When searchd isn't available, return a useful error"
 );
 
