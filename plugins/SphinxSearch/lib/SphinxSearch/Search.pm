@@ -415,8 +415,10 @@ sub tag {
         require MT::Tag;
         my $tags = delete $app->{search_string};
         require MT::Util;
-        $stash->{search_string} = MT::Util::encode_html($tags);
         my @tag_names = MT::Tag->split( ',', $tags );
+        # only grab the first tag in a multi-tag search
+        # are there any instances where we don't want to do this?
+        $stash->{search_string} = MT::Util::encode_html($tag_names[0]);
         my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
         my @tags = MT::Tag->load( { name => [ keys %tags ] } );
         my @tag_ids;
