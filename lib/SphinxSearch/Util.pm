@@ -6,8 +6,6 @@ use warnings;
 
 use Sphinx::Search;
 
-use MT::Request;
-
 # my $spx;
 
 sub _reset_sphinx {
@@ -16,9 +14,13 @@ sub _reset_sphinx {
 }
 
 sub _get_sphinx {
-    my $spx = MT::Request->instance->stash('sphinx_obj');
+    require MT;
+    my $spx = MT->instance->{__sphinx_obj};
+    if ($spx) {
+        $spx->ResetFilters();
+        return $spx;
+    }
     require Sphinx::Search;
-    return $spx if $spx;
     $spx = Sphinx::Search->new;
     require MT;
 
@@ -33,7 +35,8 @@ sub _get_sphinx {
           if ( !$port );
     }
     $spx->SetServer( $host, $port );
-    MT::Request->instance->stash( 'sphinx_obj', $spx );
+    $spx->Open();
+    MT->instance->{__sphinx_obj} = $spx;
 
     return $spx;
 }
