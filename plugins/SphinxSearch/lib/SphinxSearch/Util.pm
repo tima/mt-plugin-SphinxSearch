@@ -18,6 +18,8 @@ sub _get_sphinx {
     my $spx = MT->instance->{__sphinx_obj};
     if ($spx) {
         $spx->ResetFilters();
+        $spx->ResetOverrides();
+        $spx->ResetGroupBy();
         return $spx;
     }
     require Sphinx::Search;
@@ -35,6 +37,8 @@ sub _get_sphinx {
           if ( !$port );
     }
     $spx->SetServer( $host, $port );
+    $spx->SetEncoders( sub { shift }, sub { shift } );
+
     $spx->Open();
     MT->instance->{__sphinx_obj} = $spx;
 

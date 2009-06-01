@@ -204,6 +204,10 @@ sub sphinx_search {
         $spx->SetMatchMode(SPH_MATCH_ALL);
     }
 
+    if ( exists $params{Select} ) {
+        $spx->SetSelect( $params{Select} );
+    }
+
     my $offset = 0;
     my $limit  = 200;
     my $max    = 0;
@@ -252,15 +256,15 @@ sub sphinx_search {
         return ();
     }
 
-    my $meth        = $indexes{$datasource}->{id_to_obj};
-    my $multi_meth  = $indexes{$datasource}->{ids_to_objs}
+    my $meth       = $indexes{$datasource}->{id_to_obj};
+    my $multi_meth = $indexes{$datasource}->{ids_to_objs}
       or die "No ids_to_objs method for $datasource";
     my $i = 0;
-    
-    my @ids = map { $_->{doc} } @{$results->{matches}};
+
+    my @ids = map { $_->{doc} } @{ $results->{matches} };
     my @objs = $meth ? ( map { $meth->($_) } @ids ) : ( $multi_meth->(@ids) );
-    
-    $_->{__sphinx_result_index} = sprintf( "%04d", $i++) foreach (@objs);
+
+    $_->{__sphinx_result_index} = sprintf( "%04d", $i++ ) foreach (@objs);
 
     return @objs if wantarray;
     return {
@@ -397,8 +401,10 @@ sub sphinx_init {
 
     # only explicit id_to_obj methods will be respected
     $index_hash->{id_to_obj} = $params{id_to_obj};
-      # || sub { $class->load( $_[0] ) };
-    $index_hash->{ids_to_objs} = $params{ids_to_objs} || sub { @{$class->lookup_multi (\@_)} };
+
+    # || sub { $class->load( $_[0] ) };
+    $index_hash->{ids_to_objs} = $params{ids_to_objs}
+      || sub { @{ $class->lookup_multi( \@_ ) } };
     $indexes->{$index_name} = $index_hash;
 }
 
