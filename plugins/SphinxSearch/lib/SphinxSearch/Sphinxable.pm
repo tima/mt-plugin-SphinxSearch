@@ -208,6 +208,37 @@ sub sphinx_search {
         $spx->SetSelect( $params{Select} );
     }
 
+    if ( exists $params{GroupBy} ) {
+        exists $params{GroupBy}->{Attribute}
+          ? $spx->SetGroupBy( SPH_GROUPBY_ATTR,
+            $params{GroupBy}->{Attribute},
+            $params{GroupBy}->{Sort}
+          )
+          : exists $params{GroupBy}->{Day} ? $spx->SetGroupBy( SPH_GROUPBY_DAY,
+            $params{GroupBy}->{Day},
+            $params{GroupBy}->{Sort}
+          )
+          : exists $params{GroupBy}->{Week}
+          ? $spx->SetGroupBy( SPH_GROUPBY_WEEK,
+            $params{GroupBy}->{Week},
+            $params{GroupBy}->{Sort}
+          )
+          : exists $params{GroupBy}->{Month}
+          ? $spx->SetGroupBy( SPH_GROUPBY_MONTH,
+            $params{GroupBy}->{Month},
+            $params{GroupBy}->{Sort}
+          )
+          : exists $params{GroupBy}->{Year}
+          ? $spx->SetGroupBy( SPH_GROUPBY_YEAR,
+            $params{GroupBy}->{Year},
+            $params{GroupBy}->{Sort}
+          )
+          : die "Unknown group by";
+
+        $spx->SetGroupDistinct( $params{GroupBy}->{Distinct} )
+          if ( exists $params{GroupBy}->{Distinct} );
+    }
+
     my $offset = 0;
     my $limit  = 200;
     my $max    = 0;
