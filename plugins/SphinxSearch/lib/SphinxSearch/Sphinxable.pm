@@ -210,29 +210,20 @@ sub sphinx_search {
 
     if ( exists $params{GroupBy} ) {
         exists $params{GroupBy}->{Attribute}
-          ? $spx->SetGroupBy( SPH_GROUPBY_ATTR,
-            $params{GroupBy}->{Attribute},
-            $params{GroupBy}->{Sort}
-          )
-          : exists $params{GroupBy}->{Day} ? $spx->SetGroupBy( SPH_GROUPBY_DAY,
-            $params{GroupBy}->{Day},
-            $params{GroupBy}->{Sort}
-          )
+          ? $spx->SetGroupBy( $params{GroupBy}->{Attribute},
+            SPH_GROUPBY_ATTR, $params{GroupBy}->{Sort} )
+          : exists $params{GroupBy}->{Day}
+          ? $spx->SetGroupBy( $params{GroupBy}->{Day},
+            SPH_GROUPBY_DAY, $params{GroupBy}->{Sort} )
           : exists $params{GroupBy}->{Week}
-          ? $spx->SetGroupBy( SPH_GROUPBY_WEEK,
-            $params{GroupBy}->{Week},
-            $params{GroupBy}->{Sort}
-          )
+          ? $spx->SetGroupBy( $params{GroupBy}->{Week},
+            SPH_GROUPBY_WEEK, $params{GroupBy}->{Sort} )
           : exists $params{GroupBy}->{Month}
-          ? $spx->SetGroupBy( SPH_GROUPBY_MONTH,
-            $params{GroupBy}->{Month},
-            $params{GroupBy}->{Sort}
-          )
+          ? $spx->SetGroupBy( $params{GroupBy}->{Month},
+            SPH_GROUPBY_MONTH, $params{GroupBy}->{Sort} )
           : exists $params{GroupBy}->{Year}
-          ? $spx->SetGroupBy( SPH_GROUPBY_YEAR,
-            $params{GroupBy}->{Year},
-            $params{GroupBy}->{Sort}
-          )
+          ? $spx->SetGroupBy( $params{GroupBy}->{Year},
+            SPH_GROUPBY_YEAR, $params{GroupBy}->{Sort} )
           : die "Unknown group by";
 
         $spx->SetGroupDistinct( $params{GroupBy}->{Distinct} )
