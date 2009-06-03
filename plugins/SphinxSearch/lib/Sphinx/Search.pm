@@ -480,8 +480,8 @@ sub _Send {
     my $data = shift;
 
     $self->{_log}->debug("Writing to socket") if $self->{_debug};
-    $fp->write($data);
-    return 1;
+    # $fp->write($data);
+    # return 1;
     if ( $fp->eof || !$fp->write($data) ) {
         $self->_Error("connection unexpectedly closed (timed out?): $!");
         $self->{_connerror} = 1;
@@ -1561,7 +1561,7 @@ sub RunQueries {
     my $req = pack( "Na*", $nreqs, join( "", @{ $self->{_reqs} } ) );
     $req = pack( "nnN/a*", SEARCHD_COMMAND_SEARCH, VER_COMMAND_SEARCH, $req )
       ;    # add header
-    $self->_Send( $fp, $req );
+    $self->_Send( $fp, $req ) or do { $self->{_reqs} = []; return };
 
     $self->{_reqs} = [];
 

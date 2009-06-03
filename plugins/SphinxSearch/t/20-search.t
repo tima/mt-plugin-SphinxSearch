@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 28;
+use Test::More tests => 30;
 use Test::Deep;
 
 require MT::Template;
@@ -30,11 +30,11 @@ $tmpl->save or die $tmpl->errstr;
 my $p = MT->component('sphinxsearch');
 $p->set_config_value( 'searchd_port', '9999', 'system' );
 
-MT->instance->config->SphinxSearchdPort (9999);
+MT->instance->config->SphinxSearchdPort(9999);
 out_like(
     'MT::App::Search',
     { search => 'stuff', IncludeBlogs => 1 },
-qr/\QError querying searchd: Failed to open connection to localhost:9999: Connection refused\E/,
+qr/\QError opening persistent connection to searchd: Failed to open connection to localhost:9999: Connection refused\E/,
     "When searchd isn't available, return a useful error"
 );
 
@@ -42,6 +42,10 @@ my %filters;
 my $warning = '';
 my $error   = '';
 my $search  = '';
+my $opened  = 0;
+my $closed  = 0;
+
+my $is_conn_error = 0;
 {
     local $SIG{__WARN__} = sub { };
 
@@ -50,7 +54,10 @@ my $search  = '';
     require Sphinx::Search;
     my $orig_exec = \&Sphinx::Search::Query;
     *Sphinx::Search::Query = sub {
-        my $self        = shift;
+        my $self = shift;
+        $self->{_connerror} = $is_conn_error;
+        $is_conn_error-- if ($is_conn_error);
+        return if ( $self->{_connerror} );
         my $max_matches = $self->{_limit};
         %filters = ();
         $search  = $_[0];
@@ -71,6 +78,9 @@ my $search  = '';
             ( $warning ? ( warning => $warning ) : () )
         };
     };
+
+    *Sphinx::Search::Open  = sub { $opened++; 1; };
+    *Sphinx::Search::Close = sub { $closed++; 1; };
 }
 $tmpl->text(
 "Search string: <mt:searchstring>\nSearch count: <mt:searchresultcount>\n<mt:searchresults>Entry #<mt:entryid>\n</mt:searchresults>"
@@ -192,19 +202,16 @@ _run_app(
         use_text_filters => 1
     }
 );
-cmp_bag( $filters{category}, [1, 3], "TF1 Category filter works as expected" );
-ok (!$filters{blog_id}, "TF1 Blog filter works as expected");
+cmp_bag( $filters{category}, [ 1, 3 ],
+    "TF1 Category filter works as expected" );
+ok( !$filters{blog_id}, "TF1 Blog filter works as expected" );
 unlike(
     $search,
     qr/\Q(entry_category_1|entry_category_3)\E/,
     "TF1 Category filter does not set search string"
 );
 
-like(
-    $search,
-    qr/entry_blog_id_1/,
-    "TF1 Blog filter sets search string"
-);
+like( $search, qr/entry_blog_id_1/, "TF1 Blog filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 my $a = _run_app(
@@ -218,18 +225,13 @@ my $a = _run_app(
 );
 
 ok( !$filters{category}, "TF2 Category filter works as expected" );
-ok (!$filters{blog_id}, "TF2 Blog filter works as expected");
+ok( !$filters{blog_id},  "TF2 Blog filter works as expected" );
 like(
     $search,
     qr/\Q(entry_category_1|entry_category_3)\E/,
     "TF2 Category filter sets search string"
 );
-like(
-    $search,
-    qr/entry_blog_id_1/,
-    "TF2 Blog filter sets search string"
-);
-
+like( $search, qr/entry_blog_id_1/, "TF2 Blog filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 MT::Object->driver->clear_cache;
@@ -253,6 +255,31 @@ out_like(
     { tag => 'rain' },
     qr/This is my warning/,
     "Warning is exposed"
+);
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+$warning       = '';
+$is_conn_error = 15;
+
+out_like(
+    'MT::App::Search',
+    { tag => 'rain' },
+    qr/Error querying searchd: unable to connect after 3 retries/,
+    "Exceeding maximum retries"
+);
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+$is_conn_error = 2;
+
+out_like(
+    'MT::App::Search',
+    { tag => 'rain' },
+    qr/Search string: rain/,
+    "Did not exceed maximum retries"
 );
 
 1;

@@ -254,22 +254,56 @@ sub sphinx_search {
     $spx->SetLimits( $offset, $limit, $max );
 
     require SphinxSearch::Index;
-    my $results = $spx->Query( $search,
-        join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) )
-    );
-    if (  !$results
-        || $results->{error}
-        || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
-    {
+    my $indexes =
+      join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) );
+    my $results;
+    my $reconnects     = 0;
+    my $max_reconnects = MT->config->SphinxSearchdMaxReconnects;
+    do {
+        $results = $spx->Query( $search, $indexes );
+        if (   !$results
+            || ( $results->{error} )
+            || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
+        {
+            if ( $spx->IsConnectError() ) {
+                $spx->Close();
+                $spx->Open();
+                $reconnects++;
+            }
+            else {
+                my $errstr =
+                  $results
+                  ? ( $results->{error} || $results->{warning} )
+                  : ( $spx->GetLastError || $spx->GetLastWarning );
+                require MT::Request;
+                MT::Request->instance->stash( 'sphinx_error', $errstr );
+                MT->instance->log(
+                    {
+                        message  => "Error querying searchd daemon: " . $errstr,
+                        level    => MT::Log::ERROR(),
+                        class    => 'search',
+                        category => 'straight_search',
+                    }
+                );
+                return ();
+            }
+        }
+
+        # else {
+        elsif ( !$results && $spx->IsConnectError() ) {
+        }
+    } while ( !$results && $reconnects < $max_reconnects );
+
+    if ( !$results ) {
         my $errstr =
           $results
           ? ( $results->{error} || $results->{warning} )
           : ( $spx->GetLastError || $spx->GetLastWarning );
         require MT::Request;
-        MT::Request->instance->stash( 'sphinx_error', $errstr );
+        MT::Request->instance->stash( 'sphinx_error', "unable to connect after $max_reconnects retries (" . $errstr. ")");
         MT->instance->log(
             {
-                message  => "Error querying searchd daemon: " . $errstr,
+                message  => "Error querying searchd daemon: unable to connect after $max_reconnects retries (" . $errstr. ")",
                 level    => MT::Log::ERROR(),
                 class    => 'search',
                 category => 'straight_search',

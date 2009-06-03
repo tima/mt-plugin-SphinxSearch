@@ -67,6 +67,7 @@ sub init_registry {
             SphinxUseTextFilters        => { default => 0 },
             SphinxSearchdHost           => { default => ''},
             SphinxSearchdPort           => { default => 3312 },
+            SphinxSearchdMaxReconnects  => { default => 3 },
         },
         applications => {
             cms => { methods => { 'gen_sphinx_conf' => 'SphinxSearch::CMS::gen_sphinx_conf', } },
