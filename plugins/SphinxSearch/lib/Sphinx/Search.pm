@@ -480,9 +480,8 @@ sub _Send {
     my $data = shift;
 
     $self->{_log}->debug("Writing to socket") if $self->{_debug};
-    # $fp->write($data);
-    # return 1;
-    if ( $fp->eof || !$fp->write($data) ) {
+
+    if ( !$fp->write($data) ) {
         $self->_Error("connection unexpectedly closed (timed out?): $!");
         $self->{_connerror} = 1;
         return 0;
