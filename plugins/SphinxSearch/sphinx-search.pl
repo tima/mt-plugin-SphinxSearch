@@ -68,6 +68,7 @@ sub init_registry {
             SphinxSearchdHost           => { default => ''},
             SphinxSearchdPort           => { default => 3312 },
             SphinxSearchdMaxReconnects  => { default => 3 },
+            SphinxSearchdConnectTimeout => { default => 15 },
         },
         applications => {
             cms => { methods => { 'gen_sphinx_conf' => 'SphinxSearch::CMS::gen_sphinx_conf', } },

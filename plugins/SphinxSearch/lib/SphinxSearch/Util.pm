@@ -37,9 +37,13 @@ sub _get_sphinx {
           if ( !$port );
     }
     $spx->SetServer( $host, $port );
+    $spx->SetConnectTimeout( MT->config->SphinxSearchdConnectTimeout )
+      if ( MT->config->SphinxSearchdConnectTimeout );
     $spx->SetEncoders( sub { shift }, sub { shift } );
 
-    $spx->Open() or die "Error opening persistent connection to searchd: " . $spx->GetLastError();
+    $spx->Open()
+      or die "Error opening persistent connection to searchd: "
+      . $spx->GetLastError();
     MT->instance->{__sphinx_obj} = $spx;
 
     return $spx;
