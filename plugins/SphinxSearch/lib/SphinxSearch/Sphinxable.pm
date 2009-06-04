@@ -266,9 +266,10 @@ sub sphinx_search {
             || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
         {
             if ( $spx->IsConnectError() ) {
-                $spx->Close();
-                $spx->Open();
-                $reconnects++;
+                while ($reconnects++ < $max_reconnects) {
+                    $spx->Close();
+                    last if ($spx->Open());
+                }
             }
             else {
                 my $errstr =
@@ -289,9 +290,6 @@ sub sphinx_search {
             }
         }
 
-        # else {
-        elsif ( !$results && $spx->IsConnectError() ) {
-        }
     } while ( !$results && $reconnects < $max_reconnects );
 
     if ( !$results ) {
