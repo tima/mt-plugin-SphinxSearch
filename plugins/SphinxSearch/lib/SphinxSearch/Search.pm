@@ -430,6 +430,10 @@ sub tag {
             push @tag_ids, $_->id foreach @more;
         }
         @tag_ids = (0) unless @tags;
+        
+        # remove duplicates from the list
+        my %seen = ();
+        @tag_ids = grep { !$seen{$_}++} @tag_ids;
 
         $filters->{tag} = \@tag_ids;
     }
