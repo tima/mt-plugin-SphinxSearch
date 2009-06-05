@@ -570,6 +570,12 @@ sub _GetResponse {
         return 0;
     };
 
+    if ( !$header ) {
+        $self->_Error("response header ($header) empty: $!");
+        $self->{_connerror} = 1;
+        return 0;
+    }
+
     my ( $status, $ver, $len ) = unpack( "n2N", $header );
     my $response  = q{};
     my $lasterror = q{};
