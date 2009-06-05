@@ -164,12 +164,12 @@ MT::Session->remove( { kind => 'CS' } );
 _run_app( 'MT::App::Search',
     { searchall => 1, author => 'Bob D', use_text_filters => 1 } );
 ok( !$filters{author_id}, "Author filter works as expected" );
-is( $search, 'entry_author_id_3', "Author filter sets search string" );
+like( $search, qr/entry_author_id_3/, "Author filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 _run_app( 'MT::App::Search', { tag => 'rain', use_text_filters => 1 } );
 ok( !$filters{tag}, "Tag filter works as expected" );
-is( $search, 'entry_tag_2', "Tag filter sets search string" );
+like( $search, qr/entry_tag_2/, "Tag filter sets search string" );
 
 MT::Session->remove( { kind => 'CS' } );
 _run_app(
