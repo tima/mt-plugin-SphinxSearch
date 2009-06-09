@@ -318,6 +318,7 @@ sub sphinx_search {
         return ();
     }
 
+    warn "SPHINX WARNING: " . ($results->{warning} || $spx->GetLastWarning) if ($results->{warning});
     my $meth       = $indexes{$datasource}->{id_to_obj};
     my $multi_meth = $indexes{$datasource}->{ids_to_objs}
       or die "No ids_to_objs method for $datasource";

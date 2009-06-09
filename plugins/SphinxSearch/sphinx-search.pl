@@ -63,7 +63,7 @@ sub init_registry {
             UseSphinxTasks              => { default => 1, },
             UseSphinxDistributedIndexes => { default => 0, },
             SphinxMaxMatches            => { default => 1000 },
-            SphinxErrorOnWarning        => { default => 1 },
+            SphinxErrorOnWarning        => { default => 0 },
             SphinxUseTextFilters        => { default => 0 },
             SphinxSearchdHost           => { default => ''},
             SphinxSearchdPort           => { default => 3312 },
