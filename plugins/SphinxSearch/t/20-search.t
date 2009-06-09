@@ -250,7 +250,7 @@ MT::Object->driver->clear_cache;
 $error   = '';
 $warning = 'This is my warning';
 
-out_like(
+err_like(
     'MT::App::Search',
     { tag => 'rain' },
     qr/This is my warning/,
