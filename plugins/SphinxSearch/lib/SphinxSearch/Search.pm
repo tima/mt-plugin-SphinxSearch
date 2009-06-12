@@ -12,37 +12,11 @@ my $plugin = MT->component('sphinxsearch');
 
 sub init_app {
     my ( $cb, $app ) = @_;
-    if ( $app->id eq 'search' ) {
-        local $SIG{__WARN__} = sub { };
-        *MT::App::Search::_straight_search = \&straight_sphinx_search;
-        *MT::App::Search::_tag_search      = \&straight_sphinx_search;
-        *MT::App::Search::Context::_hdlr_result_count = \&result_count_tag;
-        my $orig_results = \&MT::App::Search::Context::_hdlr_results;
-        *MT::App::Search::Context::_hdlr_results = sub {
-            _resort_sphinx_results(@_);
-            $orig_results->(@_);
-        };
-
-        # we need to short-circuit this as the search string has been stuffed
-        # in the case of searchall=1
-        my $orig_search_string =
-          \&MT::App::Search::Context::_hdlr_search_string;
-        *MT::App::Search::Context::_hdlr_search_string = sub {
-            $app->param('searchall') ? '' : $orig_search_string->(@_);
-        };
-
-        my $orig_init = \&MT::App::Search::Context::init;
-        *MT::App::Search::Context::init = sub {
-            my $res = $orig_init->(@_);
-            _sphinx_search_context_init(@_);
-            return $res;
-          }
-    }
-    elsif ( $app->id eq 'new_search' ) {
-        local $SIG{__WARN__} = sub { };
+    if ( $app->id eq 'new_search' ) {
+        no warnings 'redefine';
         *MT::App::Search::execute = sub {
             require SphinxSearch::Util;
-            my $results = _get_sphinx_results( $_[0] );
+            my $results = _get_sphinx_results( @_ );
             return $_[0]->error( "Error querying searchd: "
                   . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr )
             ) unless ( $results && $results->{result_objs} );
@@ -76,29 +50,9 @@ sub init_request {
     }
 }
 
-sub straight_sphinx_search {
-    my $app = shift;
-
-# Skip out unless either there *is* a search term, or we're explicitly searching all
-    return 1
-      unless ( $app->{search_string} =~ /\S/ || $app->param('searchall') );
-
-    my (%hits);
-    my $results = _get_sphinx_results(
-        $app,
-        sub {
-            my ( $o, $i ) = @_;
-            my $blog_id = $o->blog_id;
-            $o->{__sphinx_search_index} = $i;
-            $app->_store_hit_data( $o->blog, $o, $hits{$blog_id}++ );
-        }
-    );
-    1;
-}
 
 sub _get_sphinx_results {
     my $app = shift;
-    my ($res_callback) = @_;
     require MT::Log;
     my $blog_id;
     if ( $app->{searchparam}{IncludeBlogs}
@@ -358,11 +312,6 @@ sub _get_sphinx_results {
         my $r = MT::Request->instance;
         $r->stash( 'sphinx_stash_name', $stash );
         $r->stash( 'sphinx_results',    $results->{result_objs} );
-    }
-    elsif ($res_callback) {
-        foreach my $o ( @{ $results->{result_objs} } ) {
-            $res_callback->( $o, $i++ );
-        }
     }
 
     my $num_pages = ceil( $results->{query_results}->{total_found} / $limit );
