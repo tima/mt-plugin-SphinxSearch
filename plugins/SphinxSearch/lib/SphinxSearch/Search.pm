@@ -16,7 +16,7 @@ sub init_app {
         no warnings 'redefine';
         *MT::App::Search::execute = sub {
             require SphinxSearch::Util;
-            my $results = _get_sphinx_results( @_ );
+            my $results = _get_sphinx_results(@_);
             return $_[0]->error( "Error querying searchd: "
                   . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr )
             ) unless ( $results && $results->{result_objs} );
@@ -38,6 +38,10 @@ sub init_app {
             _sphinx_search_context_init($ctx);
             return $ctx;
         };
+
+        require MT::App::Search::TagSearch;
+        *MT::App::Search::TagSearch::search_terms = sub { ( 1, 1 ) };
+
     }
 
 }
@@ -49,7 +53,6 @@ sub init_request {
         $app->param( 'search', 'SPHINX_SEARCH_SEARCHALL' );
     }
 }
-
 
 sub _get_sphinx_results {
     my $app = shift;
@@ -244,7 +247,7 @@ sub _get_sphinx_results {
     for
       my $filter ( map { s/^sfilter_//; $_ } grep { /^sfilter_/ } keys %params )
     {
-        $sfilters->{ $filter } = [ $app->param("sfilter_$filter") ];
+        $sfilters->{$filter} = [ $app->param("sfilter_$filter") ];
         $filter_stash->{"sphinx_filter_$filter"} =
           $app->param("sfilter_$filter");
     }
@@ -362,29 +365,32 @@ sub tag {
     # and nix the search keyword
     if ( $app->mode eq 'tag' ) {
         require MT::Tag;
-        my $tags = delete $app->{search_string};
+        my $tags =
+             delete $app->{search_string}
+          || $app->param('search')
+          || $app->param('tag');
         require MT::Util;
         my @tag_names = MT::Tag->split( ',', $tags );
+
         # only grab the first tag in a multi-tag search
         # are there any instances where we don't want to do this?
-        $stash->{search_string} = MT::Util::encode_html($tag_names[0]);
+        $stash->{search_string} = MT::Util::encode_html( $tag_names[0] );
         my %tags = map { $_ => 1, MT::Tag->normalize($_) => 1 } @tag_names;
         my @tags = MT::Tag->load( { name => [ keys %tags ] } );
-        my @tag_ids;
+        my %tag_ids;
+        my %loaded;
 
-        foreach (@tags) {
-            push @tag_ids, $_->id;
+        foreach my $tag (@tags) {
+            $tag_ids{$tag->id}++;
+            my $id = $tag->n8d_id ? $tag->n8d_id : $tag->id;
+            next if ($loaded{$id}++);
             my @more =
-              MT::Tag->load( { n8d_id => $_->n8d_id ? $_->n8d_id : $_->id } );
-            push @tag_ids, $_->id foreach @more;
+              MT::Tag->load( { n8d_id => $id } );
+            $tag_ids{$_->id}++ foreach @more;
         }
-        @tag_ids = (0) unless @tags;
-        
-        # remove duplicates from the list
-        my %seen = ();
-        @tag_ids = grep { !$seen{$_}++} @tag_ids;
+        %tag_ids = (0 => 1) unless @tags;
 
-        $filters->{tag} = \@tag_ids;
+        $filters->{tag} = [ keys %tag_ids ];
     }
 
     1;
