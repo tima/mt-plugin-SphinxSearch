@@ -302,7 +302,7 @@ sub _get_sphinx_results {
         Match        => $match_mode,
         ( $max ? ( Max => $max ) : () ),
         TextFilters => (
-              $app->param('use_text_filters')
+              defined $app->param('use_text_filters')
             ? $app->param('use_text_filters')
             : $app->config->SphinxUseTextFilters
         ),
