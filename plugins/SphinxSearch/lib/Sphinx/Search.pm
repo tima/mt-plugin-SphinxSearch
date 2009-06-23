@@ -479,6 +479,7 @@ sub _Send {
     my $fp   = shift;
     my $data = shift;
 
+    local $SIG{PIPE} = 'IGNORE';
     $self->{_log}->debug("Writing to socket") if $self->{_debug};
 
     if ( !$fp->write($data) ) {
