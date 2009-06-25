@@ -326,7 +326,7 @@ sub sphinx_search {
 
     my @ids = map { $_->{doc} } @{ $results->{matches} };
     my @objs = $meth ? ( map { $meth->($_) } @ids ) : ( $multi_meth->(@ids) );
-
+    @objs = grep { defined $_ } @objs;
     $_->{__sphinx_result_index} = sprintf( "%04d", $i++ ) foreach (@objs);
 
     return @objs if wantarray;
