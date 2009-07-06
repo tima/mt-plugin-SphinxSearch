@@ -79,7 +79,8 @@ sub sphinx_search {
     require SphinxSearch::Util;
     my $spx = SphinxSearch::Util::_get_sphinx();
 
-    my $text_filters = $params{TextFilters};
+    my $has_multi_value_filter = 0;
+    my $text_filters           = $params{TextFilters};
     if ( exists $params{Filters} ) {
         foreach my $filter ( keys %{ $params{Filters} } ) {
             next
@@ -104,6 +105,7 @@ sub sphinx_search {
                         map { join( '_', $datasource, $filter, $_ ) }
                           @{ $params{Filters}{$filter} } )
                       . ')';
+                    $has_multi_value_filter = 1;
                 }
                 else {
                     $spx->SetFilter( $filter, $params{Filters}{$filter} );
@@ -140,6 +142,7 @@ sub sphinx_search {
                         map { join( '_', $datasource, $filter, $_ ) }
                           @{ $params{SFilters}{$filter} } )
                       . ')';
+                    $has_multi_value_filter = 1;
                 }
                 else {
                     $spx->SetFilter(
@@ -193,8 +196,8 @@ sub sphinx_search {
 
     if ( exists $params{Match} ) {
         my $match = $params{Match};
-        $match eq 'extended'
-          || $text_filters > 1 ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
+        $match eq 'extended' || ( $text_filters > 1 && $has_multi_value_filter )
+          ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
           : $match eq 'boolean' ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
           : $match eq 'phrase'  ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
           : $match eq 'any'     ? $spx->SetMatchMode(SPH_MATCH_ANY)
@@ -256,69 +259,9 @@ sub sphinx_search {
     require SphinxSearch::Index;
     my $indexes =
       join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) );
-    my $results;
-    my $reconnects     = 0;
-    my $max_reconnects = MT->config->SphinxSearchdMaxReconnects;
-    do {
-        $results = $spx->Query( $search, $indexes );
-        if (   !$results
-            || ( $results->{error} )
-            || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
-        {
-            if ( $spx->IsConnectError() ) {
-                while ( $reconnects++ < $max_reconnects ) {
-                    $spx->Close();
-                    last if ( $spx->Open() );
-                }
-            }
-            else {
-                my $errstr =
-                  $results
-                  ? ( $results->{error} || $results->{warning} )
-                  : ( $spx->GetLastError || $spx->GetLastWarning );
-                require MT::Request;
-                MT::Request->instance->stash( 'sphinx_error', $errstr );
-                MT->instance->log(
-                    {
-                        message  => "Error querying searchd daemon: " . $errstr,
-                        level    => MT::Log::ERROR(),
-                        class    => 'search',
-                        category => 'straight_search',
-                    }
-                );
-                return ();
-            }
-        }
-
-    } while ( !$results && $reconnects < $max_reconnects );
-
-    if (  !$results
-        || $results->{error}
-        || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
-    {
-        my $errstr =
-          $results
-          ? ( $results->{error} || $results->{warning} )
-          : ( $spx->GetLastError || $spx->GetLastWarning );
-        require MT::Request;
-        MT::Request->instance->stash( 'sphinx_error',
-                "unable to connect after $max_reconnects retries (" 
-              . $errstr
-              . ")" );
-        MT->instance->log(
-            {
-                message =>
-"Error querying searchd daemon: unable to connect after $max_reconnects retries ("
-                  . $errstr . ")",
-                level    => MT::Log::ERROR(),
-                class    => 'search',
-                category => 'straight_search',
-            }
-        );
-        return ();
-    }
-
-    warn "SPHINX WARNING: " . ($results->{warning} || $spx->GetLastWarning) if ($results->{warning});
+    my $results = _perform_query( $spx, $search, $indexes ) or return ();
+    warn "SPHINX WARNING: " . ( $results->{warning} || $spx->GetLastWarning )
+      if ( $results->{warning} );
     my $meth       = $indexes{$datasource}->{id_to_obj};
     my $multi_meth = $indexes{$datasource}->{ids_to_objs}
       or die "No ids_to_objs method for $datasource";
@@ -473,6 +416,88 @@ sub sphinx_init {
 
 sub sphinx_result_index {
     return shift->{__sphinx_result_index};
+}
+
+sub _build_errstr {
+    my ( $results, $spx, $search, $indexes ) = @_;
+
+    my $extended_error = MT->config->SphinxExtendedErrorMessages;
+
+    my $base_errstr =
+      $results
+      ? ( $results->{error} || $results->{warning} )
+      : ( $spx->GetLastError || $spx->GetLastWarning );
+
+    return $base_errstr unless ($extended_error);
+
+    require Data::Dumper;
+    $base_errstr .= "\n";
+    $base_errstr .= "QUERY   = '$search'\n";
+    $base_errstr .= "INDEXES = '$indexes'\n";
+    $base_errstr .= Data::Dumper->Dump( [$spx], [qw(sphinx_object)] );
+
+    $base_errstr;
+}
+
+sub _perform_query {
+    my ( $spx, $search, $indexes ) = @_;
+    my $results;
+    my $reconnects     = 0;
+    my $max_reconnects = MT->config->SphinxSearchdMaxReconnects;
+    do {
+        $results = $spx->Query( $search, $indexes );
+        if (   !$results
+            || ( $results->{error} )
+            || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
+        {
+            if ( $spx->IsConnectError() ) {
+                while ( $reconnects++ < $max_reconnects ) {
+                    $spx->Close();
+                    last if ( $spx->Open() );
+                }
+            }
+            else {
+                my $errstr = _build_errstr( $results, $spx, $search, $indexes );
+                require MT::Request;
+                MT::Request->instance->stash( 'sphinx_error', $errstr );
+                MT->instance->log(
+                    {
+                        message  => "Error querying searchd daemon: " . $errstr,
+                        level    => MT::Log::ERROR(),
+                        class    => 'search',
+                        category => 'straight_search',
+                    }
+                );
+                return;
+            }
+        }
+
+    } while ( !$results && $reconnects < $max_reconnects );
+
+    if (  !$results
+        || $results->{error}
+        || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
+    {
+        my $errstr = _build_errstr( $results, $spx, $search, $indexes );
+        require MT::Request;
+        MT::Request->instance->stash( 'sphinx_error',
+                "unable to connect after $max_reconnects retries (" 
+              . $errstr
+              . ")" );
+        MT->instance->log(
+            {
+                message =>
+"Error querying searchd daemon: unable to connect after $max_reconnects retries ("
+                  . $errstr . ")",
+                level    => MT::Log::ERROR(),
+                class    => 'search',
+                category => 'straight_search',
+            }
+        );
+        return;
+    }
+
+    $results;
 }
 
 1;
