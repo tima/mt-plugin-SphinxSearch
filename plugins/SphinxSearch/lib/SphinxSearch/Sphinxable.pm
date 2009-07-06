@@ -434,7 +434,8 @@ sub _build_errstr {
     $base_errstr .= "\n";
     $base_errstr .= "QUERY   = '$search'\n";
     $base_errstr .= "INDEXES = '$indexes'\n";
-    $base_errstr .= Data::Dumper->Dump( [$spx], [qw(sphinx_object)] );
+    $base_errstr .= "SPHINX  = " . Data::Dumper->Dump( [$spx], [qw(sphinx_object)] );
+    $base_errstr .= "RESULTS = " . Data::Dumper->Dump( [$results], [qw(results)] );
 
     $base_errstr;
 }
