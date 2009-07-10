@@ -199,12 +199,13 @@ sub sphinx_search {
 
     if ( exists $params{Match} ) {
         my $match = $params{Match};
-        $match eq 'extended' || ( $text_filters > 1 && $has_multi_value_filter )
-          ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
-          : $match eq 'boolean' ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
-          : $match eq 'phrase'  ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
-          : $match eq 'any'     ? $spx->SetMatchMode(SPH_MATCH_ANY)
-          :                       $spx->SetMatchMode(SPH_MATCH_ALL);
+        $match eq 'extended' ? $spx->SetMatchMode(SPH_MATCH_EXTENDED)
+          : $match eq 'boolean'
+          || ( $text_filters > 1 && $has_multi_value_filter )
+          ? $spx->SetMatchMode(SPH_MATCH_BOOLEAN)
+          : $match eq 'phrase' ? $spx->SetMatchMode(SPH_MATCH_PHRASE)
+          : $match eq 'any'    ? $spx->SetMatchMode(SPH_MATCH_ANY)
+          :                      $spx->SetMatchMode(SPH_MATCH_ALL);
     }
     else {
         $spx->SetMatchMode(SPH_MATCH_ALL);
