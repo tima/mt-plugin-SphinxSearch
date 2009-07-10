@@ -80,7 +80,10 @@ sub sphinx_search {
     my $spx = SphinxSearch::Util::_get_sphinx();
 
     my $has_multi_value_filter = 0;
-    my $text_filters           = $params{TextFilters};
+    my $text_filters =
+      defined $params{TextFilters}
+      ? $params{TextFilters}
+      : MT->config->SphinxUseTextFilters;
     if ( exists $params{Filters} ) {
         foreach my $filter ( keys %{ $params{Filters} } ) {
             next
@@ -434,8 +437,10 @@ sub _build_errstr {
     $base_errstr .= "\n";
     $base_errstr .= "QUERY   = '$search'\n";
     $base_errstr .= "INDEXES = '$indexes'\n";
-    $base_errstr .= "SPHINX  = " . Data::Dumper->Dump( [$spx], [qw(sphinx_object)] );
-    $base_errstr .= "RESULTS = " . Data::Dumper->Dump( [$results], [qw(results)] );
+    $base_errstr .=
+      "SPHINX  = " . Data::Dumper->Dump( [$spx], [qw(sphinx_object)] );
+    $base_errstr .=
+      "RESULTS = " . Data::Dumper->Dump( [$results], [qw(results)] );
 
     $base_errstr;
 }
