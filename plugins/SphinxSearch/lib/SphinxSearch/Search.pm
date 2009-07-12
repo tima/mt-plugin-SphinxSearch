@@ -302,10 +302,20 @@ sub _get_sphinx_results {
         Match        => $match_mode,
         ( $max ? ( Max => $max ) : () ),
         TextFilters => (
-              defined $app->param('use_text_filters')
+            defined $app->param('use_text_filters')
             ? $app->param('use_text_filters')
             : $app->config->SphinxUseTextFilters
         ),
+        (
+            $app->param('forced_filters')
+            ? (
+                ForcedFilters => {
+                    map { $_ => 1 }
+                      split( /\s*,\s*/, $app->param('forced_filters') )
+                }
+              )
+            : ()
+        )
     );
     return unless ($results);
     my $i = 0;
@@ -381,14 +391,13 @@ sub tag {
         my %loaded;
 
         foreach my $tag (@tags) {
-            $tag_ids{$tag->id}++;
+            $tag_ids{ $tag->id }++;
             my $id = $tag->n8d_id ? $tag->n8d_id : $tag->id;
-            next if ($loaded{$id}++);
-            my @more =
-              MT::Tag->load( { n8d_id => $id } );
-            $tag_ids{$_->id}++ foreach @more;
+            next if ( $loaded{$id}++ );
+            my @more = MT::Tag->load( { n8d_id => $id } );
+            $tag_ids{ $_->id }++ foreach @more;
         }
-        %tag_ids = (0 => 1) unless @tags;
+        %tag_ids = ( 0 => 1 ) unless @tags;
 
         $filters->{tag} = [ keys %tag_ids ];
     }

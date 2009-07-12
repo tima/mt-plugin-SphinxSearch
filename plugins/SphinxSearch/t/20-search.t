@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 30;
+use Test::More tests => 33;
 use Test::Deep;
 
 require MT::Template;
@@ -232,6 +232,29 @@ like(
     "TF2 Category filter sets search string"
 );
 like( $search, qr/entry_blog_id_1/, "TF2 Blog filter sets search string" );
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+_run_app(
+    'MT::App::Search',
+    {
+        searchall        => 1,
+        category         => 'foo,subfoo',
+        blog_id          => 1,
+        use_text_filters => 2,
+        forced_filters   => 'blog_id',
+    }
+);
+
+ok( !$filters{category}, "TF2 Category filter works as expected" );
+cmp_bag( $filters{blog_id}, [ 1 ],  "FF Blog filter works as expected" );
+like(
+    $search,
+    qr/\Q(entry_category_1|entry_category_3)\E/,
+    "TF2 Category filter sets search string"
+);
+
 
 MT::Session->remove( { kind => 'CS' } );
 MT::Object->driver->clear_cache;

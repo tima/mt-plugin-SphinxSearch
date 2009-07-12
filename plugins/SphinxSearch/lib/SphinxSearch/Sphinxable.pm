@@ -79,6 +79,17 @@ sub sphinx_search {
     require SphinxSearch::Util;
     my $spx = SphinxSearch::Util::_get_sphinx();
 
+    my %forced_filter_list = ();
+    if ( $params{ForcedFilters} ) {
+        %forced_filter_list = %{$params{ForcedFilters}};
+    }
+    else {
+        %forced_filter_list = map { $_ => 1 } map {
+            split( /\s*,\s*/,
+                ( MT->config->SphinxSearchdForcedFilters->{$_} || '' ) )
+        } ( 'all', @classes );
+    }
+
     my $has_multi_value_filter = 0;
     my $text_filters =
       defined $params{TextFilters}
@@ -89,7 +100,7 @@ sub sphinx_search {
             next
               unless ( ref( $params{Filters}->{$filter} ) eq 'ARRAY'
                 && scalar @{ $params{Filters}{$filter} } );
-            if ($text_filters) {
+            if ( $text_filters && !exists $forced_filter_list{$filter} ) {
                 my $filter_str;
                 if (
                     scalar @{
@@ -126,7 +137,7 @@ sub sphinx_search {
     if ( exists $params{SFilters} ) {
         require String::CRC32;
         foreach my $filter ( keys %{ $params{SFilters} } ) {
-            if ($text_filters) {
+            if ( $text_filters && !exists $forced_filter_list{$filter} ) {
                 my $filter_str;
                 if (
                     scalar @{

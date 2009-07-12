@@ -71,6 +71,7 @@ sub init_registry {
             SphinxSearchdConnectTimeout => { default => 15 },
             SphinxExtendedErrorMessages => { default => 0 },
             SphinxSearchdAgentRetries   => { default => 4 },
+            SphinxSearchdForcedFilters  => { default => {}, type => 'HASH'},
         },
         applications => {
             cms => { methods => { 'gen_sphinx_conf' => 'SphinxSearch::CMS::gen_sphinx_conf', } },
