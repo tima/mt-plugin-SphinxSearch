@@ -84,10 +84,25 @@ sub sphinx_search {
         %forced_filter_list = %{$params{ForcedFilters}};
     }
     else {
-        %forced_filter_list = map { $_ => 1 } map {
-            split( /\s*,\s*/,
-                ( MT->config->SphinxSearchdForcedFilters->{$_} || '' ) )
-        } ( 'all', @classes );
+        # %forced_filter_list = map { $_ => 1 } map {
+        #     split( /\s*,\s*/,
+        #         ( MT->config->SphinxSearchdForcedFilters->{$_} || '' ) )
+        # } ( 'all', @classes );
+        my $conf = MT->config->SphinxSearchdForcedFilters;
+        $conf ||= q{};
+        my $hash;
+        if ( ref $conf ) {
+            $hash = $conf;
+        }
+        else {
+            my %tmp_hash = map { split( /=/, $_ ) } split (/;/, $conf);
+            $hash = \%tmp_hash;
+        }
+        if ( $hash and ref $hash eq q{HASH} ) {
+            %forced_filter_list = map { $_ => 1 }
+                map { split( /\s*,\s*/, ( $hash->{$_} || '' ) ) }
+                ( 'all', @classes );
+        }
     }
 
     my $has_multi_value_filter = 0;

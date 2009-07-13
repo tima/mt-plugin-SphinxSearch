@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use lib 't/lib', 'lib', 'extlib';
-use Test::More tests => 15;
+use Test::More tests => 16;
 
 use MT::Test qw( :db :data );
 
@@ -16,12 +16,13 @@ use MT;
 use MT::App;
 my $mt = MT::App->instance or die MT::App->errstr;
 
-my $plugin = MT::Plugin::SphinxSearch->instance;
+my $plugin = MT->component('sphinxsearch');
 ok( $plugin, "Plugin loaded successfully" );
 
 # grab the plugin config and blank it out
 my $pd = $plugin->get_config_obj('system');
-$pd->data( {} );
+
+# $pd->data( {} );
 
 require_ok('SphinxSearch::Config');
 
@@ -35,7 +36,7 @@ like(
     "Configured db host value successfully set"
 );
 
-$pd->data( { db_host => 'testing_db_host_value' } );
+$plugin->set_config_value( 'db_host', 'testing_db_host_value', 'system' );
 like(
     SphinxSearch::Config->_gen_sphinx_conf_tmpl->output,
     qr/sql_host\s*=\s*testing_db_host_value/,
@@ -49,7 +50,7 @@ like(
     "Configured db user value successfully set"
 );
 
-$pd->data( { db_user => 'testing_db_user_value' } );
+$plugin->set_config_value( 'db_user', 'testing_db_user_value', 'system' );
 like(
     SphinxSearch::Config->_gen_sphinx_conf_tmpl->output,
     qr/sql_user\s*=\s*testing_db_user_value/,
@@ -63,14 +64,14 @@ like(
     "Configured db password value successfully set"
 );
 
-$pd->data( { db_pass => 'testing_db_pass_value' } );
+$plugin->set_config_value( 'db_pass', 'testing_db_pass_value', 'system' );
 like(
     SphinxSearch::Config->_gen_sphinx_conf_tmpl->output,
     qr/sql_pass\s*=\s*testing_db_pass_value/,
     "Alternate database password value successfully set"
 );
 
-$pd->data( { db_pass => 'testing_with_#_value' } );
+$plugin->set_config_value( 'db_pass', 'testing_with_#_value', 'system' );
 like(
     SphinxSearch::Config->_gen_sphinx_conf_tmpl->output,
     qr/sql_pass\s*=\s*testing_with_\\#_value/,
@@ -103,7 +104,7 @@ like(
     "1.5 times max # entries max_matches value"
 );
 
-$pd->data( { use_indexer_tasks => 0 } );
+$plugin->set_config_value( 'use_indexer_tasks', 0, 'system' );
 require MT::TheSchwartz;
 is(
     scalar MT::TheSchwartz->instance->list_jobs(
@@ -113,8 +114,8 @@ is(
     "No jobs in the queue"
 );
 
-$plugin->sphinx_indexer_task('main');
-
+require_ok('SphinxSearch::Tasks');
+SphinxSearch::Tasks::sphinx_indexer();
 is(
     scalar MT::TheSchwartz->instance->list_jobs(
         { funcname => 'SphinxSearch::Worker::Indexer' }
@@ -123,11 +124,9 @@ is(
     "No jobs were added"
 );
 
-$pd->data( { use_indexer_tasks => 1 } );
+$plugin->set_config_value( 'use_indexer_tasks', 1, 'system' );
 MT->config->UseSphinxTasks(1);
-
-$plugin->sphinx_indexer_task('main');
-
+SphinxSearch::Tasks::sphinx_indexer();
 is(
     scalar MT::TheSchwartz->instance->list_jobs(
         { funcname => 'SphinxSearch::Worker::Indexer' }
@@ -135,3 +134,5 @@ is(
     1,
     "One job was added"
 );
+
+1;

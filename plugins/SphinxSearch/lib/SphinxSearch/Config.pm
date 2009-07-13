@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 use List::Util qw( max );
+use SphinxSearch::Util;
 
 sub _gen_sphinx_conf_tmpl {
     my $plugin = MT->component('sphinxsearch');
@@ -28,7 +29,7 @@ sub _gen_sphinx_conf_tmpl {
     $params{file_path} =
          $plugin->get_config_value( 'sphinx_file_path', 'system' )
       || $app->{cfg}->TempDir;
-    $params{pid_path} = $plugin->_pid_path;
+    $params{pid_path} = SphinxSearch::Util::_pid_path();
     $params{morphology} =
       $plugin->get_config_value( 'index_morphology', 'system' ) || 'none';
 

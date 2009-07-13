@@ -11,12 +11,12 @@ use MT::Test qw ( :cms );
 
 # my $mt = MT::App->instance or die MT::App->errstr;
 
-my $plugin = MT::Plugin::SphinxSearch->instance;
+my $plugin = MT->component('sphinxsearch');
 ok( $plugin, "Unable to load the plugin instance" );
 
 require_ok('SphinxSearch::Index');
 
-my %indexes = $plugin->sphinx_indexes;
+my %indexes = %{SphinxSearch::Index::_get_sphinx_indexes() };
 
 sub check_indexes {
     my ( $params, $indexes, $name ) = @_;

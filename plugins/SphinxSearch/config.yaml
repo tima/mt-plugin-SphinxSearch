@@ -1,0 +1,135 @@
+id: SphinxSearch
+name: SphinxSearch
+description: A search script using the sphinx search engine for MySQL
+version: 0.99.93mt4
+
+author_name: Six Apart, Ltd.
+author_link: http://www.sixapart.com/
+
+system_config_template: system_config.tmpl
+settings:
+    sphinx_path:
+        scope: system
+    sphinx_file_path:
+        scope: system
+    sphinx_conf_path:
+        scope: system
+    searchd_host:
+        default: 'localhost'
+        scope: system
+    searchd_port:
+        default: 3312
+        scope: system
+    searchd_pid_path:
+        default: '/var/log/searchd.pid'
+        scope: system
+    search_excerpt_words:
+        default: 9
+        scope: system
+    index_morphology:
+        default: 'none'
+        scope: system
+    db_host:
+        scope: system
+    db_user:
+        scope: system
+    db_pass:
+        scope: system
+    use_indexer_tasks:
+        default: 1
+        scope: system
+
+config_settings:
+    UseSphinxTasks:
+        default: 1
+    UseSphinxDistributedIndexes:
+        default: 0
+    SphinxMaxMatches:
+        default: 1000
+    SphinxErrorOnWarning:
+        default: 0
+    SphinxUseTextFilters:
+        default: 0
+    SphinxSearchdHost:
+        default: ''
+    SphinxSearchdPort:
+        default: 3312
+    SphinxSearchdMaxReconnects:
+        default: 3
+    SphinxSearchdConnectTimeout:
+        default: 15
+    SphinxExtendedErrorMessages:
+        default: 0
+    SphinxSearchdAgentRetries:
+        default: 4
+    SphinxSearchdForcedFilters:
+        type: HASH
+
+applications:
+    cms:
+        methods:
+            gen_sphinx_conf: 'SphinxSearch::CMS::gen_sphinx_conf'
+    new_search:
+        callbacks:
+            sphinx_search.tag: '$SphinxSearch::SphinxSearch::Search::tag'
+            sphinx_search.category: '$SphinxSearch::SphinxSearch::Search::category'
+            sphinx_search.date: '$SphinxSearch::SphinxSearch::Search::date'
+            sphinx_search.author: '$SphinxSearch::SphinxSearch::Search::author'
+            init_request: '$SphinxSearch::SphinxSearch::Search::init_request'
+            take_down: '$SphinxSearch::SphinxSearch::Search::take_down'
+
+tasks:
+    sphinx_delta_indexer:
+        name: 'Sphinx Delta Indexer'
+        frequency: 120
+        code: $SphinxSearch::SphinxSearch::Tasks::sphinx_delta_indexer
+    sphinx_indexer:
+        name: 'Sphinx Indexer'
+        frequency: 86400
+        code: $SphinxSearch::SphinxSearch::Tasks::sphinx_indexer
+
+callbacks:
+    MT::Template::pre_load: '$SphinxSearch::SphinxSearch::Util::pre_load_template'
+    post_init:
+        priority: 1
+        handler: '$SphinxSearch::SphinxSearch::Util::init_sphinxable'
+
+init_app: '$SphinxSearch::SphinxSearch::Util::init_apps'
+          
+tags:
+    function:
+        SearchResultsOffset: $SphinxSearch::SphinxSearch::Tags::search_results_offset_tag
+        SearchResultsLimit: $SphinxSearch::SphinxSearch::Tags::search_results_limit_tag
+        SearchResultsPage: $SphinxSearch::SphinxSearch::Tags::search_results_page_tag
+        SearchSortMode: $SphinxSearch::SphinxSearch::Tags::search_sort_mode_tag
+        SearchMatchMode: $SphinxSearch::SphinxSearch::Tags::search_match_mode_tag
+        SearchResultExcerpt: $SphinxSearch::SphinxSearch::Tags::search_result_excerpt_tag
+        NextSearchResultsPage: $SphinxSearch::SphinxSearch::Tags::next_search_results_page
+        PreviousSearchResultsPage: $SphinxSearch::SphinxSearch::Tags::previous_search_results_page
+        SearchAllResult: $SphinxSearch::SphinxSearch::Tags::search_all_result_tag
+        SearchTotalPages: $SphinxSearch::SphinxSearch::Tags::search_total_pages_tag
+        SearchFilterValue: $SphinxSearch::SphinxSearch::Tags::search_filter_value_tag
+        SearchParameters: $SphinxSearch::SphinxSearch::Tags::search_parameters_tag
+        SearchDateStart: $SphinxSearch::SphinxSearch::Tags::search_date_start_tag
+        SearchDateEnd: $SphinxSearch::SphinxSearch::Tags::search_date_end_tag
+    block:
+        IfCurrentSearchResultsPage?: $SphinxSearch::SphinxSearch::Tags::if_current_search_results_page_conditional_tag
+        IfNotCurrentSearchResultsPage?:  $SphinxSearch::SphinxSearch::Tags::if_not_current_search_results_page
+        IfMultipleSearchResultsPages?: $SphinxSearch::SphinxSearch::Tags::if_multiple_search_results_pages_conditional_tag
+        IfSingleSearchResultsPage?: $SphinxSearch::SphinxSearch::Tags::if_single_search_results_page
+        SearchResultsPageLoop: $SphinxSearch::SphinxSearch::Tags::search_results_page_loop_container_tag
+        SearchNextPage: $SphinxSearch::SphinxSearch::Tags::search_next_page_tag
+        SearchPreviousPage: $SphinxSearch::SphinxSearch::Tags::search_previous_page_tag
+        SearchCategories: $SphinxSearch::SphinxSearch::Tags::search_categories_container_tag
+        IfFirstSearchResultsPage?: $SphinxSearch::SphinxSearch::Tags::if_first_search_results_page
+        IfLastSearchResultsPage?: $SphinxSearch::SphinxSearch::Tags::if_last_search_results_page
+        IfIndexSearched?: $SphinxSearch::SphinxSearch::Tags::if_index_searched_conditional_tag
+        IfSearchFiltered?: $SphinxSearch::SphinxSearch::Tags::if_search_filtered_conditional_tag
+        IfSearchSortedBy?: $SphinxSearch::SphinxSearch::Tags::if_search_sorted_by_conditional_tag
+        IfSearchDateStart?: $SphinxSearch::SphinxSearch::Tags::if_search_date_start_conditional_tag
+        IfSearchDateEnd?: $SphinxSearch::SphinxSearch::Tags::if_search_date_end_conditional_tag
+
+task_workers:
+    sphinx_indexer_task:
+        label: "Runs the sphinx indexer."
+        class: 'SphinxSearch::Worker::Indexer'

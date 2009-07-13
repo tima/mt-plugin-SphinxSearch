@@ -1,6 +1,6 @@
 
 use lib 't/lib', 'lib', 'extlib';
-use Test::More tests => 15;
+use Test::More tests => 16;
 use Test::Exception;
 use Test::Deep;
 
@@ -18,17 +18,17 @@ use MT;
 # use MT::App;
 my $mt = MT->instance or die MT->errstr;
 
-
+require_ok('SphinxSearch::Worker::Indexer');
 {
     local $SIG{__WARN__} = sub {};
-    *MT::Plugin::SphinxSearch::run_cmd = sub {
+    *SphinxSearch::Worker::Indexer::run_cmd = sub {
         @args = @_;
         shift @args; # don't need the first one
         return $fail ? $fail : $_[0]->error ("Testing!");
     };
 }
 
-my $plugin = MT::Plugin::SphinxSearch->instance;
+my $plugin = MT->component('sphinxsearch');
 ok ($plugin, "Load the plugin instance");
 
 SKIP:
