@@ -11,7 +11,7 @@ BEGIN {
 }
 
 use MT::Test qw( :app :db :data );
-use Test::More tests => 33;
+use Test::More tests => 37;
 use Test::Deep;
 
 require MT::Template;
@@ -42,6 +42,9 @@ my %filters;
 my $warning = '';
 my $error   = '';
 my $search  = '';
+
+my $index   = '';
+
 my $opened  = 0;
 my $closed  = 0;
 
@@ -61,6 +64,7 @@ my $is_conn_error = 0;
         my $max_matches = $self->{_limit};
         %filters = ();
         $search  = $_[0];
+        $index   = $_[1];
         for my $f ( @{ $self->{_filters} } ) {
             $filters{ $f->{attr} } = $f->{values};
         }
@@ -188,8 +192,6 @@ like(
     "Category filter sets search string"
 );
 
-print "ABOUT TO RUN THE TF2 test!\n";
-
 require MT::Object;
 MT::Object->driver->clear_cache;
 MT::Session->remove( { kind => 'CS' } );
@@ -304,5 +306,28 @@ out_like(
     qr/Search string: rain/,
     "Did not exceed maximum retries"
 );
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+$index = '';
+_run_app ('MT::App::Search', { tag => 'rain' });
+is($index, 'entry_index entry_delta_index', "Searched main+delta");
+
+MT::Session->remove( { kind => 'CS' } );
+MT::Object->driver->clear_cache;
+
+MT->config->UseSphinxDistributedIndexes(1);
+
+$index = '';
+_run_app ('MT::App::Search', { tag => 'rain' });
+is($index, 'entry_index_distributed', "Searched distributed index");
+
+_run_app('MT::App::Search', { tag => 'rain', use_distributed => 1 });
+is($index, 'entry_index_distributed', "Searched distributed index, with param");
+
+_run_app('MT::App::Search', { tag => 'rain', use_distributed => 0 });
+is($index, 'entry_index entry_delta_index', "Searched main+delta index, with param");
+
 
 1;

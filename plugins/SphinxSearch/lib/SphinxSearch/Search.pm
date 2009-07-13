@@ -287,6 +287,7 @@ sub _get_sphinx_results {
     }
 
     my $match_mode = $app->param('match_mode') || 'all';
+    my $distributed = defined $app->param ('use_distributed') ? $app->param ('use_distributed') : MT->config->UseSphinxDistributedIndexes;
 
     require SphinxSearch::Sphinxable;
     my $results = SphinxSearch::Sphinxable->sphinx_search(
@@ -315,7 +316,8 @@ sub _get_sphinx_results {
                 }
               )
             : ()
-        )
+        ),
+        UseDistributed => $distributed,
     );
     return unless ($results);
     my $i = 0;

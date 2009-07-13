@@ -16,7 +16,10 @@ sub which_indexes {
     my %params = @_;
     my @indexes;
 
-    my $use_deltas = !MT->config->UseSphinxDistributedIndexes;
+    my $use_deltas =
+      defined $params{UseDistributed}
+      ? !$params{UseDistributed}
+      : !MT->config->UseSphinxDistributedIndexes;
 
     if ( my $indexer = $params{Indexer} ) {
         if ( $indexer eq 'all' ) {

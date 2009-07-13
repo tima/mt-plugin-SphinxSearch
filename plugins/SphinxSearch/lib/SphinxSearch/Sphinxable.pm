@@ -81,9 +81,10 @@ sub sphinx_search {
 
     my %forced_filter_list = ();
     if ( $params{ForcedFilters} ) {
-        %forced_filter_list = %{$params{ForcedFilters}};
+        %forced_filter_list = %{ $params{ForcedFilters} };
     }
     else {
+
         # %forced_filter_list = map { $_ => 1 } map {
         #     split( /\s*,\s*/,
         #         ( MT->config->SphinxSearchdForcedFilters->{$_} || '' ) )
@@ -95,13 +96,13 @@ sub sphinx_search {
             $hash = $conf;
         }
         else {
-            my %tmp_hash = map { split( /=/, $_ ) } split (/;/, $conf);
+            my %tmp_hash = map { split( /=/, $_ ) } split( /;/, $conf );
             $hash = \%tmp_hash;
         }
         if ( $hash and ref $hash eq q{HASH} ) {
             %forced_filter_list = map { $_ => 1 }
-                map { split( /\s*,\s*/, ( $hash->{$_} || '' ) ) }
-                ( 'all', @classes );
+              map { split( /\s*,\s*/, ( $hash->{$_} || '' ) ) }
+              ( 'all', @classes );
         }
     }
 
@@ -287,8 +288,17 @@ sub sphinx_search {
     $spx->SetLimits( $offset, $limit, $max );
 
     require SphinxSearch::Index;
-    my $indexes =
-      join( ' ', SphinxSearch::Index->which_indexes( Source => [@classes] ) );
+    my $indexes = join(
+        ' ',
+        SphinxSearch::Index->which_indexes(
+            Source => [@classes],
+            (
+                defined $params{UseDistributed}
+                ? ( UseDistributed => $params{UseDistributed} )
+                : ()
+            )
+        )
+    );
     my $results = _perform_query( $spx, $search, $indexes ) or return ();
     warn "SPHINX WARNING: " . ( $results->{warning} || $spx->GetLastWarning )
       if ( $results->{warning} );
