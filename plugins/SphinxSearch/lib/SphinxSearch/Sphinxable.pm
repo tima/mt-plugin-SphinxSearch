@@ -488,6 +488,7 @@ sub _perform_query {
     my $reconnects     = 0;
     my $max_reconnects = MT->config->SphinxSearchdMaxReconnects;
     do {
+        $spx->{_reqs} = []; # explicitly empty out the _reqs array, just in case
         $results = $spx->Query( $search, $indexes );
         if (   !$results
             || ( $results->{error} )
