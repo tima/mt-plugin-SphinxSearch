@@ -64,6 +64,8 @@ config_settings:
         default: 4
     SphinxSearchdForcedFilters:
         type: HASH
+    SphinxSearchdReadTimeout:
+        default: 5
 
 applications:
     cms:

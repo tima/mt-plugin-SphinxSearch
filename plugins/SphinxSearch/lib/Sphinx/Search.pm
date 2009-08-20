@@ -297,8 +297,9 @@ sub new {
         _connerror => '',
 
         # request storage (for multi-query case)
-        _reqs    => [],
-        _timeout => 0,
+        _reqs         => [],
+        _timeout      => 0,
+        _read_timeout => 0,
 
         _string_encoder => \&encode_utf8,
         _string_decoder => \&decode_utf8,
@@ -474,6 +475,14 @@ sub SetConnectTimeout {
     $self->{_timeout} = $timeout;
 }
 
+sub SetReadTimeout {
+    my $self    = shift;
+    my $timeout = shift;
+
+    croak("read timeout is not numeric") unless ( $timeout =~ m/$num_re/ );
+    $self->{_read_timeout} = $timeout;
+}
+
 sub _Send {
     my $self = shift;
     my $fp   = shift;
@@ -530,6 +539,10 @@ sub _Connect {
         return 0;
     }
     binmode( $fp, ':bytes' );
+    if ( $self->{_read_timeout} ) {
+        my $to = pack( 'qq', $self->{_read_timeout}, 0 );
+        $fp->sockopt( SO_RCVTIMEO, $to );
+    }
 
     # check version
     my $buf = '';

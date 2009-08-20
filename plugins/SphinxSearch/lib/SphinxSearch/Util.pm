@@ -41,6 +41,7 @@ sub _get_sphinx {
       if ( MT->config->SphinxSearchdConnectTimeout );
     $spx->SetEncoders( sub { shift }, sub { shift } );
     $spx->SetRetries( MT->config->SphinxSearchdAgentRetries );
+    $spx->SetReadTimeout( MT->config->SphinxSearchdReadTimeout );
 
     $spx->Open()
       or die "Error opening persistent connection to searchd: "
@@ -140,6 +141,5 @@ sub _pid_path {
       if ($sphinx_file_path);
     return $sphinx_file_path;
 }
-
 
 1;
