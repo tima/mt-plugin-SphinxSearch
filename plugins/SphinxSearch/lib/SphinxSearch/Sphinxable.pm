@@ -490,9 +490,15 @@ sub _perform_query {
     do {
         $spx->{_reqs} = []; # explicitly empty out the _reqs array, just in case
         $results = $spx->Query( $search, $indexes );
-        if (   !$results
-            || ( $results->{error} )
-            || ( $results->{warning} && MT->config->SphinxErrorOnWarning ) )
+        if (
+            (
+                  !$results
+                && $spx->GetLastError() ne 'Resource temporarily unavailable'
+            )
+            || (   $results->{error}
+                && $results->{error} ne 'Resource temporarily unavailable' )
+            || ( $results->{warning} && MT->config->SphinxErrorOnWarning )
+          )
         {
             if ( $spx->IsConnectError() ) {
                 while ( $reconnects++ < $max_reconnects ) {
