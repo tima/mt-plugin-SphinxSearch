@@ -566,6 +566,7 @@ sub _Connect {
     $self->_Send( $fp, pack( "N", 1 ) ) or return 0;
 
     $self->{_log}->debug("Connection complete") if $debug;
+    $self->{_connected_at} = time;
 
     return $fp;
 }

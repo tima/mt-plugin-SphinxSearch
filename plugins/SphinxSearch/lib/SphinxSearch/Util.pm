@@ -20,6 +20,15 @@ sub _get_sphinx {
         $spx->ResetFilters();
         $spx->ResetOverrides();
         $spx->ResetGroupBy();
+
+        my $time_since_opened = time - $spx->{_connected_at};
+        if ( $time_since_opened > MT->config->SphinxSearchdMaxConnectionAge ) {
+            $spx->Close();
+            $spx->Open()
+              or die "Error opening persistent connection to searchd: "
+              . $spx->GetLastError();
+        }
+
         return $spx;
     }
     require Sphinx::Search;

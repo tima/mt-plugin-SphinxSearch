@@ -66,6 +66,8 @@ config_settings:
         type: HASH
     SphinxSearchdReadTimeout:
         default: 5
+    SphinxSearchdMaxConnectionAge:
+        default: 60
 
 applications:
     cms:
