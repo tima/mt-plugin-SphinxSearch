@@ -504,7 +504,15 @@ sub _Send {
 sub _Connect {
     my $self = shift;
 
-    return $self->{_socket} if $self->{_socket};
+    # this block is based on the patch from shodan
+    if ( $self->{_socket} ) {
+        require IO::Select;
+        my $sel = IO::Select->new( $self->{_socket} );
+        return $self->{_socket}
+          if ( !$sel->can_read(0) && $sel->can_write(0) );
+        close( $self->{_socket} );
+        delete $self->{_socket};
+    }
 
     my $debug = $self->{_debug};
     my $str_dest =
