@@ -1,7 +1,7 @@
 id: SphinxSearch
 name: SphinxSearch
 description: A search script using the sphinx search engine for MySQL
-version: 0.99.99mt4
+version: 0.100.1
 
 author_name: Six Apart, Ltd.
 author_link: http://www.sixapart.com/
