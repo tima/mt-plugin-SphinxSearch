@@ -68,6 +68,8 @@ config_settings:
         default: 5
     SphinxSearchdMaxConnectionAge:
         default: 60
+    SphinxSearchdReadRetries:
+        default: 4
 
 applications:
     cms:

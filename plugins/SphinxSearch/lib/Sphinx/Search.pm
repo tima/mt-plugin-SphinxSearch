@@ -11,6 +11,7 @@ use Config;
 use Math::BigInt;
 use IO::Socket::INET;
 use IO::Socket::UNIX;
+use POSIX qw(:errno_h);
 use Encode qw/encode_utf8 decode_utf8/;
 
 my $is_native64 =
@@ -300,6 +301,7 @@ sub new {
         _reqs         => [],
         _timeout      => 0,
         _read_timeout => 0,
+        _read_retries => 0,
 
         _string_encoder => \&encode_utf8,
         _string_decoder => \&decode_utf8,
@@ -478,9 +480,35 @@ sub SetConnectTimeout {
 sub SetReadTimeout {
     my $self    = shift;
     my $timeout = shift;
+    my $retries = shift;
 
     croak("read timeout is not numeric") unless ( $timeout =~ m/$num_re/ );
     $self->{_read_timeout} = $timeout;
+    if ($retries) {
+        croak("read retries is not numeric") unless ( $retries =~ m/$num_re/ );
+        $self->{_read_retries} = $retries;
+    }
+}
+
+sub _Read {
+    my $self   = shift;
+    my $fp     = shift;
+    my $buf    = shift;
+    my $length = shift;
+    my $offset = shift || 0;
+
+    my $read_retries = 0;
+    my $len;
+    while ( !defined( $len = $fp->read( $$buf, $length, $offset ) ) ) {
+        last
+          if ( $! != EAGAIN )
+          ;    # kick out if this isn't the "read timed out" error
+        last
+          if ( $read_retries++ >= $self->{_read_retries} )
+          ;    # otherwise keep bumping up the retries
+    }
+
+    return $len;
 }
 
 sub _Send {
@@ -554,7 +582,7 @@ sub _Connect {
 
     # check version
     my $buf = '';
-    $fp->read( $buf, 4 ) or do {
+    $self->_Read( $fp, \$buf, 4 ) or do {
         $self->_Error("Failed on initial read from $str_dest: $!");
         $self->{_connerror} = 1;
         return 0;
@@ -588,7 +616,7 @@ sub _GetResponse {
     my $client_ver = shift;
 
     my $header;
-    defined( $fp->read( $header, 8, 0 ) ) or do {
+    defined( $self->_Read( $fp, \$header, 8, 0 ) ) or do {
         $self->_Error("read failed: $!");
         return 0;
     };
@@ -603,11 +631,13 @@ sub _GetResponse {
     my $response  = q{};
     my $lasterror = q{};
     my $lentotal  = 0;
-    while ( my $rlen = $fp->read( my $chunk, $len ) ) {
+    my $chunk;
+    while ( my $rlen = $self->_Read( $fp, \$chunk, $len ) ) {
         $lasterror = $!, last if $rlen < 0;
         $response .= $chunk;
         $lentotal += $rlen;
         last if $lentotal >= $len;
+        undef $chunk;
     }
     close($fp) unless $self->{_socket};
 

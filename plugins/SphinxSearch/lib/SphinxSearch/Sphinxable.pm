@@ -491,13 +491,15 @@ sub _perform_query {
         $spx->{_reqs} = []; # explicitly empty out the _reqs array, just in case
         $results = $spx->Query( $search, $indexes );
         if (
-            (
-                  !$results
-                && $spx->GetLastError() ne 'Resource temporarily unavailable'
+            ( !$results )
+            || (
+                ref($results) eq 'HASH'
+                && (
+                    ( $results->{error} )
+                    || ( $results->{warning}
+                        && MT->config->SphinxErrorOnWarning )
+                )
             )
-            || (   $results->{error}
-                && $results->{error} ne 'Resource temporarily unavailable' )
-            || ( $results->{warning} && MT->config->SphinxErrorOnWarning )
           )
         {
             if ( $spx->IsConnectError() ) {
