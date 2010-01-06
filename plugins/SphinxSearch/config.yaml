@@ -1,7 +1,7 @@
 id: SphinxSearch
 name: SphinxSearch
 description: Alternative search engine in MT using SphinxSearch
-version: 0.200
+version: 0.201
 
 author_name: Six Apart, Ltd.
 author_link: http://www.sixapart.com/
@@ -126,6 +126,10 @@ tags:
         SearchParameters: $SphinxSearch::SphinxSearch::Tags::search_parameters_tag
         SearchDateStart: $SphinxSearch::SphinxSearch::Tags::search_date_start_tag
         SearchDateEnd: $SphinxSearch::SphinxSearch::Tags::search_date_end_tag
+
+        # special tag
+        SphinxTagPool:      '$SphinxSearch::SphinxSearch::Tags::_hdlr_sphinx_tag_pool'
+
     block:
         IfCurrentSearchResultsPage?: $SphinxSearch::SphinxSearch::Tags::if_current_search_results_page_conditional_tag
         IfNotCurrentSearchResultsPage?:  $SphinxSearch::SphinxSearch::Tags::if_not_current_search_results_page
@@ -142,6 +146,10 @@ tags:
         IfSearchSortedBy?: $SphinxSearch::SphinxSearch::Tags::if_search_sorted_by_conditional_tag
         IfSearchDateStart?: $SphinxSearch::SphinxSearch::Tags::if_search_date_start_conditional_tag
         IfSearchDateEnd?: $SphinxSearch::SphinxSearch::Tags::if_search_date_end_conditional_tag
+
+        # special tags
+        SphinxTags:       '$SphinxSearch::SphinxSearch::Tags::_hdlr_sphinx_search_results'
+        SearchResults:      '$SphinxSearch::SphinxSearch::Tags::_hdlr_sphinx_search_results'
 
 task_workers:
     sphinx_indexer_task:

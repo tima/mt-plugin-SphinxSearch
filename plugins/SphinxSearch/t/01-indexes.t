@@ -36,13 +36,13 @@ is( scalar SphinxSearch::Index->which_indexes,
 
 check_indexes(
     { Indexer => 'all' },
-    [qw( entry_index entry_delta_index comment_index comment_delta_index )],
+    [qw( entry_index entry_delta_index comment_index comment_delta_index tag_index )],
     "All indexer indexes"
 );
 
 check_indexes(
     { Indexer => 'main' },
-    [qw( comment_index entry_index )],
+    [qw( comment_index entry_index tag_index )],
     "Main indexer indexes"
 );
 
@@ -78,6 +78,12 @@ check_indexes(
     { Source => [qw( entry comment )] },
     [qw( entry_index entry_delta_index comment_index comment_delta_index )],
     "Entry and comment source indexes"
+);
+
+check_indexes(
+    { Source => ['tag'] },
+    [qw( tag_index )],
+    "Tag array source indexes"
 );
 
 require MT;

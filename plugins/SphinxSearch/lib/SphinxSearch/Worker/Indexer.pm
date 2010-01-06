@@ -61,7 +61,7 @@ sub start_searchd {
 
     my $searchd_path = File::Spec->catfile( $bin_path, 'searchd' );
 
-    $job->failed( "Going to start searchd: " . "$searchd_path --config $conf_path" );
+    #$job->failed( "Going to start searchd: " . "$searchd_path --config $conf_path" );
     run_cmd($plugin, "$searchd_path --config $conf_path");
 }
 

@@ -1,0 +1,46 @@
+
+<style>
+
+	.sidebar-tags { margin: 0px; }
+	.sidebar-tags .tag {
+		display: block;
+		float: left;
+	}
+	.sidebar-tags ul { list-style-type: disc; }
+	.sidebar-tags .tag a {
+		background-color: white;
+		border-color: #ABA9A9;
+		border-style: solid;
+		border-width: 1px;
+		color: #2D2D2D;
+		float: left;
+		font-size: x-small;
+		font-weight: bold;
+		list-style-type: none;
+		margin-bottom: 2px;
+		margin-right: 2px;
+		padding: 5px;
+		text-transform: uppercase;
+		text-decoration: none;
+	}
+	.sidebar-tags .tag a:hover { 
+		background-color: #CCDDEE;
+		color: #093D72;
+		outline: none;
+		text-decoration: none;
+	}
+</style>
+
+<ul class="sidebar-tags">
+	<MTSearchResults>
+	<li class="tag">
+		<a href="<mt:TagSearchLink>" title="<mt:TagName> (<mt:TagCount>)">
+			<mt:TagName>
+		</a>
+	</li>
+	</MTSearchResults>
+</ul>
+<br /><br /> <hr />
+
+<mt:NoSearchResults> No tags found... </mt:NoSearchResults>
+<mt:NoSearch> Tags not found... </mt:NoSearch>

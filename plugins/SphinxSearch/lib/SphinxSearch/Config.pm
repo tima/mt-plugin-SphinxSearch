@@ -48,7 +48,34 @@ sub _get_data_rows {
 		my @mva_fields;
 		my @normal_fields;
 
+		# Do counts first
+        if ( my $counts = $index_hash->{count_columns} ) {
+            for my $count ( keys %$counts ) {
+                my $what_class  = $counts->{$count}->{what};
+                my $with_column = $counts->{$count}->{with};
+                my $wheres      = $counts->{$count}->{select_values};
+
+         		eval("require $what_class;");
+         		next if ($@);
+
+			    my $terms = {$with_column => $obj->id};
+				if ($wheres) {
+	             	@$terms{keys %$wheres} = values %$wheres;
+				}
+
+         		my $count_val = $what_class->count($terms);
+         		next if ($@);
+         
+				my %tmp_field;
+				$tmp_field{key} = $count;
+				$tmp_field{value} = $count_val;
+				push @group_fields, \%tmp_field;
+			}
+		}
+
+		# Do regular columns next
 		foreach(@{ $index_hash->{columns}}) {
+
 			my %tmp_field;
 			$tmp_field{key} = $_;
 			$tmp_field{value} = encode_html($obj->$_);
@@ -77,40 +104,82 @@ sub _get_data_rows {
 			}
 		}
 
+		# Do special and/or mva columns
 		if ($index_hash->{mva}) {
 			
             foreach my $mva ( keys %{ $index_hash->{mva} } ) {
 
                 my $cur_mva = $index_hash->{mva}->{$mva};
+				my %tmp_field;
+				$tmp_field{key} = $mva;				
 
-				my %terms;
-				my $mva_key = "id";
-                if ( my $sel_values = $cur_mva->{select_values} ) {	
-					@terms{keys %$sel_values} = values %$sel_values;
-				}
-				if( my $id_columns = $cur_mva->{by} ) {
-					$terms{$id_columns->[0]} = $obj->id;
-					$mva_key = $id_columns->[1];
-				} else {
-					%terms = ( "${mva}_".$index_hash->{id_column} => $obj->id );
-				}
-				
-				my $mva_source = $cur_mva->{with};
-				next if(!$mva_source || $mva_source eq '');
-				
-				eval("use $mva_source");
+				# This is a hack. XMLPipes and SQL queries
+                if ( my $mva_query = $cur_mva->{query} ) {
 
-				my @mva_value;
-				if($mva_source->can('load')) {
-					my @mva_vals = $mva_source->load( \%terms );
-					foreach(@mva_vals) {
-						push @mva_value, $_->$mva_key;
+					my $mva_class = $cur_mva->{to};
+					$mva_class = $cur_mva->{with} if(!$mva_class);
+					my @cols = @{$cur_mva->{by}};
+					
+					eval("require $mva_class;") if($mva_class);
+					next if ($@);
+
+					my $driver = $mva_class->dbi_driver;
+					my $dbh = $driver->rw_handle;
+
+					$mva_query .= " AND ".$cols[0]." = ".$obj->id;
+				    my $sth = $dbh->prepare($mva_query);
+
+				    return 0 if !$sth; # ignore this operation if _meta column doesn't exist
+				    $sth->execute or next;
+
+					my $rows;
+					my @mva_value;
+				    while (my $row = $sth->fetchrow_arrayref) {
+						$rows++;
+						push @mva_value, $row->[1];
 					}
-					my %tmp_field;
-					$tmp_field{key} = $mva;				
+					$sth->finish;
+				    
 					$tmp_field{value} = join(',',@mva_value);
-
 					push @mva_fields, \%tmp_field;
+					
+				} else {
+
+					my %terms;
+					my $mva_key = "id";
+	                if ( my $sel_values = $cur_mva->{select_values} ) {	
+						@terms{keys %$sel_values} = values %$sel_values;
+					}
+					if( my $id_columns = $cur_mva->{by} ) {
+
+						# First column is selecting Object column
+						$terms{$id_columns->[0]} = $obj->id;
+						
+						# Second column becomes new Join column
+						$mva_key = $id_columns->[1];
+						next if($mva_key !~ /_id/ );
+						
+					} else {
+						%terms = ( "${mva}_".$index_hash->{id_column} => $obj->id );
+					}
+				
+					my $mva_source = $cur_mva->{with};
+					next if(!$mva_source || $mva_source eq '');
+				
+					eval("use $mva_source");
+
+					my %args;
+					my @mva_value;
+					if($mva_source->can('load')) {
+						
+						my @mva_vals = $mva_source->load( \%terms, \%args );
+						foreach(@mva_vals) {
+							push @mva_value, $_->$mva_key;
+						}
+
+						$tmp_field{value} = join(',',@mva_value);
+						push @mva_fields, \%tmp_field;
+					}
 				}
             }
 		}

@@ -10,7 +10,7 @@ use warnings;
 
 my $verbose;
 
-my @SUPPORTED_CLASSES = qw( Blog Author Comment Entry );
+my @SUPPORTED_CLASSES = qw( Blog Author Comment Entry Tag );
 my @SUPPORTED_INDICES = qw( main delta );
 
 my $index_type;

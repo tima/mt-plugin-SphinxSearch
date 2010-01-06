@@ -16,6 +16,7 @@ sub init_app {
         no warnings 'redefine';
         *MT::App::Search::execute = sub {
             require SphinxSearch::Util;
+
             my $results = _get_sphinx_results(@_);
             return $_[0]->error( "Error querying searchd: "
                   . ( SphinxSearch::Util::_get_sphinx_error() || $_[0]->errstr )
@@ -89,7 +90,7 @@ sub _get_sphinx_results {
     my $sort_mode       = {};
     my $sort_mode_param = $app->param('sort_mode') || 'descend';
     my $sort_by_param   = $app->param('sort_by')
-      || ( $index =~ /\bentry\b/ ? 'authored_on' : 'created_on' );
+      || ( $index =~ /\bentry\b/ ? 'authored_on' : ( $index =~ /\btag\b/ ? 'entry_count' : 'created_on' ) );
 
     if ( $sort_mode_param eq 'descend' ) {
         $sort_mode = { Descend => $sort_by_param };
@@ -319,6 +320,7 @@ sub _get_sphinx_results {
         ),
         UseDistributed => $distributed,
     );
+
     return unless ($results);
     my $i = 0;
 

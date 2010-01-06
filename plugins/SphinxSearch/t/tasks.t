@@ -46,7 +46,7 @@ SKIP:
 
     $plugin->start_indexer;
     my @indexes = grep { /_index/ } split (/\s+/, join (' ' , @args));
-    cmp_bag (\@indexes, [qw( entry_index comment_index )], "Entry and comment indexes present for unspecified indexer");
+    cmp_bag (\@indexes, [qw( entry_index comment_index tag_index )], "Entry, comment and tag indexes present for unspecified indexer");
 
     $plugin->start_indexer ('delta');
     @indexes = grep { /_index/ } split (/\s+/, join (' ' , @args));
@@ -54,7 +54,7 @@ SKIP:
 
     $plugin->start_indexer ('all');
     @indexes = grep { /_index/ } split (/\s+/, join (' ' , @args));
-    cmp_bag (\@indexes, [ qw( entry_index entry_delta_index comment_index comment_delta_index )], "All indexes being indexed");
+    cmp_bag (\@indexes, [ qw( entry_index entry_delta_index comment_index comment_delta_index tag_index )], "All indexes being indexed");
 
     ok (!$plugin->start_indexer ('gobbledeegook'), "start_indexer with garbage argument should return false");
 
@@ -65,7 +65,7 @@ SKIP:
     lives_ok { $plugin->sphinx_indexer_task ('main') } 'sphinx_indexer_task should live if launching succeeds';
 
     @indexes = grep { /_index/ } split (/\s+/, join (' ' , @args));
-    cmp_bag (\@indexes, [qw( entry_index comment_index )], "Entry and comment indexes present for sphinx_indexer_task");
+    cmp_bag (\@indexes, [qw( entry_index comment_index tag_index )], "Entry, comment and tag indexes present for sphinx_indexer_task");
 
     $fail = 0;
     throws_ok { $plugin->sphinx_indexer_task ('delta') } qr/Error starting [^:]*: Testing!/;

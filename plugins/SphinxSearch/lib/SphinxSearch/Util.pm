@@ -100,6 +100,7 @@ sub init_sphinxable {
                 query =>
 'select distinct mt_comment.comment_id, response_to.comment_commenter_id from mt_comment, mt_comment as response_to where mt_comment.comment_entry_id = response_to.comment_entry_id and mt_comment.comment_created_on > response_to.comment_created_on and response_to.comment_commenter_id is not null',
                 to     => 'MT::Author',
+	            by => [ 'comment_id', 'author_id' ],
                 lookup => 'name',
                 stash  => [ 'author', 'authors' ],
             },
@@ -112,6 +113,41 @@ sub init_sphinxable {
             }
         }
     );
+
+    require MT::Tag;
+    require MT::ObjectTag;
+
+	MT::Tag->sphinx_init(
+	    index         => 'tag',
+	    stash         => 'sphinxtags',
+	    select_values => { is_private => 0 },
+		include_columns => [ 'name' ],
+		count_columns => {
+			entry_count => {
+				what => 'MT::ObjectTag',
+				with => 'tag_id',
+				select_values => { object_datasource => 'entry' }
+			}
+		},
+	    mva => {
+			entry => {
+	            to            => 'MT::Entry',
+	            with          => 'MT::ObjectTag',
+	            by            => [ 'tag_id', 'object_id' ],
+	            select_values => { object_datasource => 'entry' },
+			},
+			category => {
+	            to => 'MT::Category',
+                lookup => 'id',
+                stash  => [ 'category', 'categories' ],
+
+	            by => [ 'tag_id', 'category_id' ],
+				# remember to allow for the appendage of the columns defined above: by[0] = object_id i.e. tag_id = object_id.
+				# See Config.pm fore more details
+				query => 'select distinct tag_id, placement_category_id from mt_tag, mt_objecttag, mt_placement where tag_id = objecttag_tag_id and objecttag_object_id = placement_entry_id'
+			},
+		}
+	);
 }
 
 sub init_apps {

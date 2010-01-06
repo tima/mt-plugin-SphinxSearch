@@ -4,6 +4,8 @@ package SphinxSearch::Tags;
 use strict;
 use warnings;
 
+require MT::Tag;
+
 sub search_results_page_loop_container_tag {
     my ( $ctx, $args, $cond ) = @_;
 
@@ -285,20 +287,20 @@ sub search_categories_container_tag {
     for my $cat (@cats) {
         local $ctx->{__stash}{category} = $cat;
 
-# Don't think we need all these bits right now
-# local $ctx->{__stash}{entries};
-# local $ctx->{__stash}{category_count};
-# local $ctx->{__stash}{blog_id} = $cat->blog_id;
-# local $ctx->{__stash}{blog} = MT::Blog->load($cat->blog_id, { cached_ok => 1 });
-# my @args = (
-#     { blog_id => $cat->blog_id,
-#       status => MT::Entry::RELEASE() },
-#     { 'join' => [ 'MT::Placement', 'entry_id',
-#                   { category_id => $cat->id } ],
-#       'sort' => 'created_on',
-#       direction => 'descend', });
-# $ctx->{__stash}{category_count} = MT::Entry->count(@args);
-# next unless $ctx->{__stash}{category_count} || $args->{show_empty};
+	# # Don't think we need all these bits right now
+	# local $ctx->{__stash}{entries};
+	# local $ctx->{__stash}{category_count};
+	# local $ctx->{__stash}{blog_id} = $cat->blog_id;
+	# local $ctx->{__stash}{blog} = MT::Blog->load($cat->blog_id, { cached_ok => 1 });
+	# my @args = (
+	#     { blog_id => $cat->blog_id,
+	#       status => MT::Entry::RELEASE() },
+	#     { 'join' => [ 'MT::Placement', 'entry_id',
+	#                   { category_id => $cat->id } ],
+	#       'sort' => 'created_on',
+	#       direction => 'descend', });
+	# $ctx->{__stash}{category_count} = MT::Entry->count(@args);
+	# next unless $ctx->{__stash}{category_count} || $args->{show_empty};
 
         defined( my $out = $builder->build( $ctx, $tokens, $cond ) )
           or return $ctx->error( $builder->errstr );
@@ -403,6 +405,113 @@ sub if_first_search_results_page {
 
 sub if_last_search_results_page {
     !next_search_results_page(@_);
+}
+
+# special tags
+
+# This tag can be used in two ways for now in the Search Results template:
+	# 1) through SeachResults, which it overrides and falls back if no tags were found
+	# 2) specifically through SphinxTags, which is an alternative for search results block
+# Later this can be expanded to more objects returned in the search results that the CORE engine cannot handle
+	
+sub _hdlr_sphinx_search_results {
+    my ( $ctx, $args, $cond ) = @_;
+
+    my $tmpltag = lc $ctx->stash('tag');
+
+    # for the case that we want to use mt:Entries with mt-search
+    # send to MT::Template::Search if searh results are found
+    if ($ctx->stash('results') && (!$ctx->stash('sphinxtags') && $tmpltag eq 'searchresults') ) {
+        require MT::Template::Context::Search;
+        return MT::Template::Context::Search::_hdlr_results($ctx, $args, $cond);
+    }
+	
+    my @tags = ( @{ $ctx->stash('sphinxtags') } );  
+	if(@tags) {
+
+		my $total = scalar(@tags);
+
+        # Initialize the loop variables
+        my $res = '';                               # Cumulative output
+        my $count = 0;                              # Loop counter
+        my $attr = $args->{attributes} || {};       # Tag attributes
+        my $glue = $attr->{glue} || $args->{glue};  # Glue for output
+        my $vars = $ctx->{__stash}{vars} ||= {};    # Template variables
+        my $builder = $ctx->stash('builder');       # Builder objects
+        my $tokens = $ctx->stash('tokens');         # Current template tokens
+
+		for my $tag (@tags) {
+
+            $count++;
+            local $ctx->{__stash}{Tag} = $tag;
+
+            local $vars->{__first__} = $count == 1;
+            local $vars->{__last__} = ($count == $total);
+            local $vars->{__odd__} = ($count % 2) == 1;
+            local $vars->{__even__} = ($count % 2) == 0;
+            local $vars->{__counter__} = $count;
+
+            defined(my $out = $builder->build($ctx, $tokens, $cond))
+                or return $ctx->error( $builder->errstr );
+            
+			$res .= $glue if defined($glue) && ( $count > 1 );
+            $res .= $out;
+        }
+		$res;
+    }
+    else {
+
+		# Fall back to standard search results
+        require MT::Template::Context::Search;
+        return MT::Template::Context::Search::_hdlr_results($ctx, $args, $cond);
+    }
+}
+
+# Special function tag to dynamically load a Search URL through jQuery and return the tag-pool based on its parameters.
+# Accepts the following:
+	# div			=>	ID of thne HTML element to load the results in. If not passed it loads in its own DIV by the ID #tagpool
+	# category		=>	comma-delimited list of category basenames to filter the results. Can be single or list of all categories but not meant to be empty
+	# searchall		=>	to return tags always
+	# include_blogs	=>	filter based on one or more blogs
+	# jquery		=>	can be 1, 0 or anything. If not 0, then a link to jQuery is included in the published page statically. Loads from the jQuery host
+	
+sub _hdlr_sphinx_tag_pool {
+	my ($ctx, $args) = @_;
+
+	my $div = $args->{div} || 'tagpool';
+	my $cats = $args->{category} || '';
+	my $tmpl = $args->{template} || 'tagcloud';
+	my $searchall = $args->{searchall} || '1';
+	my $blogs = $args->{include_blogs} || $args->{blog_ids}|| '';
+
+	my $load_jquery = $args->{jquery} || '0';
+	$load_jquery = '<script type="text/javascript" src="http://code.jquery.com/jquery-latest.pack.js"></script>' if($load_jquery ne '0');
+	$load_jquery = '' if($load_jquery eq '0');
+	
+	my $app = MT->instance;
+	my $script = $ctx->{config}->SearchScript;
+    
+	my $cgi_path = $app->config('CGIPath');
+	$cgi_path .= '/' unless $cgi_path =~ m!/$!;
+	$cgi_path .= $script;
+
+	my $html = <<HTML;
+
+	$load_jquery
+	<div id="tagpool">
+		<div id="waiting">...</div>
+	</div>
+	<script type="text/javascript">
+		\$(document).ready(function(){
+			\$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count" },
+			  function(data){
+			    // alert("Data Loaded: " + data);
+				\$("#$div").html(data);
+			  });
+		});
+	</script>
+HTML
+	return $html;	
 }
 
 1;
