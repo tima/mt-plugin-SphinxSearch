@@ -1,0 +1,96 @@
+<div class="setting">
+    <div class="label"><label for="search_excerpt_words">Search Excerpt Words:</label></div>
+    <div class="field"><input type="text" name="search_excerpt_words" value="<TMPL_VAR NAME=SEARCH_EXCERPT_WORDS>" />
+        <p>The maximum number of words before and after the search string to include in an excerpt.</p>
+    </div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="index_morphology">Index Morphology</label></div>
+    <div class="field">
+        <select name="index_morphology">
+            <option value="none"<TMPL_IF NAME=INDEX_MORPHOLOGY_NONE> selected="selected"</TMPL_IF>>None</option>
+            <option value="stem_en"<TMPL_IF NAME=INDEX_MORPHOLOGY_STEM_EN> selected="selected"</TMPL_IF>>English Stemming</option>
+            <option value="stem_ru"<TMPL_IF NAME=INDEX_MORPHOLOGY_STEM_RU> selected="selected"</TMPL_IF>>Russian Stemming</option>
+            <option value="stem_enru"<TMPL_IF NAME=INDEX_MORPHOLOGY_STEM_ENRU> selected="selected"</TMPL_IF>>English and Russian Stemming</option>
+            <option value="soundex"<TMPL_IF NAME=INDEX_MORPHOLOGY_SOUNDEX> selected="selected"</TMPL_IF>>Soundex</option>
+        </select>
+		<p>Enables matching of words to their stem, base or root form. Example: the string "cats" (and possibly "catlike", "catty" etc.) as based on the root "cat", and "stemmer", "stemming", "stemmed" as based on "stem"</p>
+    </div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="min_word_len">Minimum Word length:</label></div>
+    <div class="field"><input type="text" name="min_word_len" id="min_word_len" value="<TMPL_VAR NAME=MIN_WORD_LEN>" /></div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="charset_type">Charset Type:</label></div>
+    <div class="field"><input type="text" name="charset_type" id="charset_type" value="<TMPL_VAR NAME=CHARSET_TYPE>" /></div>
+</div>
+ 
+<div class="setting grouped">
+<div class="label"><label for="sphinx_path">Sphinx Binary Path:</label></div>
+<div class="field"><input type="text" name="sphinx_path" value="<TMPL_VAR NAME=SPHINX_PATH>" />
+	<p>The installed path for the sphinx binaries, specifically <code>indexer</code>.  If <code>indexer</code> is installed at <code>/usr/local/bin/indexer</code>, the value here should be <code>/usr/local/bin</code>.</p>
+</div>
+</div>
+
+<div class="setting grouped">
+<div class="label"><label for="sphinx_conf_path">Sphinx Config Path</label></div>
+<div class="field">
+	<input type="text" name="sphinx_conf_path" value="<TMPL_VAR NAME=SPHINX_CONF_PATH>" />
+	<p>Full path for the sphinx.conf file (e.g., <code>/etc/sphinx/sphinx.conf</code>).</p>
+</div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="sphinx_file_path">Sphinx Files Path</label></div>
+    <div class="field">
+        <input type="text" name="sphinx_file_path" value="<TMPL_VAR NAME=SPHINX_FILE_PATH>" />
+        <p>Path to use for all the sphinx files (indexes, pid, logs, etc.)</p>
+    </div>
+</div>
+
+<div class="setting grouped">
+    <div class="label"><label for="searchd_host">Searchd Host:</label></div>
+    <div class="field"><input type="text" name="searchd_host" id="searchd_host" value="<TMPL_VAR NAME=SEARCHD_HOST>" /></div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="searchd_port">Searchd Port:</label></div>
+    <div class="field"><input type="text" name="searchd_port" id="searchd_port" value="<TMPL_VAR NAME=SEARCHD_PORT>" /></div>
+</div>
+
+<div class="setting grouped">
+    <div class="label"><label for="db_host">Alternate DB Host:</label></div>
+    <div class="field"><input type="text" name="db_host" id="db_host" value="<TMPL_VAR NAME=DB_HOST>" /></div>
+</div>
+
+<div class="setting grouped">
+    <div class="label"><label for="db_user">Alternate DB Username:</label></div>
+    <div class="field"><input type="text" name="db_user" id="db_user" value="<TMPL_VAR NAME=DB_USER>" /></div>
+</div>
+
+<div class="setting">
+    <div class="label"><label for="db_pass">Alternate DB Password:</label></div>
+    <div class="field"><input type="text" name="db_pass" id="db_pass" value="<TMPL_VAR NAME=DB_PASS>" /></div>
+</div>
+
+<mtapp:setting
+    id="use_indexer_tasks"
+    label="Use Indexer Tasks"
+    hint="Automatically re-index and re-start searchd with <code>run-periodic-tasks</code>"
+    show_hint="1">
+    <input type='checkbox' class='cb' name='use_indexer_tasks' id='use_indexer_tasks'<mt:if name='use_indexer_tasks'> checked="checked"</mt:if> />
+</mtapp:setting>
+
+<mtapp:setting
+    id="sphinx_conf_type"
+    label="Use xpipe2"
+    hint="Uses xmlpipe2 format to store and retrieve config and indexed data making it database agnostic. <a href='http://www.sphinxsearch.com/docs/current.html#xmlpipe2'>See here for more information</a>"
+    show_hint="1">
+    <input type='checkbox' class='cb' name='sphinx_conf_type' value='xml' id='sphinx_conf_type'<mt:if name='sphinx_conf_type' eq="xml"> checked="checked"</mt:if> />
+</mtapp:setting>
+
+<p><a href="<TMPL_VAR NAME=SCRIPT_URI>?__mode=gen_sphinx_conf">Generate sphinx.conf file from MT settings</a></p>

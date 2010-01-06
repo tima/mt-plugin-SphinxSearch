@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+
+package SphinxSearch::GenSphinxPipe;
+use lib qw( lib extlib );
+
+# use MT::Util qw( encode_xml );
+use base qw( MT::Tool );
+use strict;
+use warnings;
+
+my $verbose;
+
+my @SUPPORTED_CLASSES = qw( Blog Author Comment Entry Tag );
+my @SUPPORTED_INDICES = qw( main delta );
+
+my $index_type;
+my $datasource;
+
+sub options {
+    return (
+        'verbose+'	=> \$verbose,
+        'type=s'	=> \$index_type,
+        'ds=s'		=> \$datasource
+    );
+}
+
+sub main {
+    my $self = shift;
+    ($verbose) = $self->SUPER::main(@_);
+
+	my $joint_ds = join('|', @SUPPORTED_CLASSES);
+	my $joint_idx = join('|', @SUPPORTED_INDICES);
+	
+	die "Unsupported datasource: $datasource not in $joint_ds\n" if($datasource !~ /($joint_ds)/ig );
+	die "Unsupported index: $index_type not in $joint_idx\n" if($index_type !~ /($joint_idx)/i );
+	
+    require MT::Request;
+    my $r = MT::Request->instance;
+    $r->stash( 'index_class', $datasource );
+    $r->stash( 'index_type', $index_type );
+
+    require SphinxSearch::Config;
+    my $tmpl = SphinxSearch::Config->_get_sphinx_xml_stream();
+    my $str  = $tmpl->output;
+    print "$str\n";
+}
+
+__PACKAGE__->main unless caller;

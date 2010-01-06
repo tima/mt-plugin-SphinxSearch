@@ -1,0 +1,155 @@
+<mt:blogs include_blogs="all">
+	<mt:setvarblock name="options" append="1">
+		<option value="<mt:BlogId>"><mt:BlogName></option>
+	</mt:setvarblock>
+
+	<mt:setvarblock name="opt"><mt:BlogId></mt:setvarblock>
+	<mt:var name="allopts" function="push" value="$opt">
+</mt:blogs>
+
+<html>
+<head>
+	<title>Sphinx Tags Search :: Test page </title>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-latest.pack.js"></script>
+	<script>
+	
+	$(document).ready(function() {
+		$('#searchtxt').attr("disabled", true);
+
+		$("#searchtxt").click(function() {
+			
+			if($(this).attr("value") == "(specify a search term to find)" )
+				$(this).attr("value", "");
+		});
+	});
+	function setsearch(sel) {
+
+		if(sel.value == '1') {
+			$('#searchtxt').attr("disabled", true);
+			$("#searchtxt").attr("value", "(specify a search term to find)");
+		} else {
+			$('#searchtxt').removeAttr("disabled");
+		}
+	}
+	</script>
+</head>
+<body>
+	<h2>Sphinx Tags Search :: Test page</h2>
+	<mt:setvarblock name="searchscript"><mt:CGIPath><mt:SearchScript></mt:setvarblock>
+	<a href="<mt:var name='searchscript'>?IncludeBlogs=<mt:var name="allopts" glue=",">&index=tag&sort_by=entry_count&Template=tagsearch&search=shoe">
+		Simple Search Term Test</a> <br />
+	<a href="<mt:var name='searchscript'>?IncludeBlogs=<mt:var name="allopts" glue=",">&index=tag&sort_by=entry_count&Template=tagsearch&search=&category=travel">
+		Search Term + Category Filter Test</a> <br />
+	
+	<a href="<mt:var name='searchscript'>?IncludeBlogs=<mt:var name="allopts" glue=",">&index=tag&sort_by=entry_count&Template=tagsearch&searchall=1&category=design">
+		Search-ALL + Category Filter Test</a> <br />
+
+	<hr />
+
+	<h3>Search Parameters sent:</h3>
+	MatchMode: <mt:SearchMatchMode> <br />
+	SearchSortMode: <mt:SearchSortMode> <br />
+	SearchAllResult: <mt:SearchAllResult> <br />
+	SearchResultsPage: <mt:SearchResultsPage> <br />
+	SearchFilterValue: <mt:SearchFilterValue name="category"> <br />
+	SearchParameters: <mt:SearchParameters> <br />
+	SearchTotalPages: <mt:SearchTotalPages> <br />
+	<hr />
+
+	<form method="GET" action="<$MTCGIPath$><$MTSearchScript$>">
+
+		<h3>Search within Blogs</h3>
+		<p>
+			<select name="IncludeBlogs" multiple="1">
+				<option value="<mt:var name="allopts" glue=",">">All</option>
+				<mt:var name="options">
+			</select>
+		</p>
+
+		<!-- Important Hidden Params -->
+		<input type="hidden" name="index" value="tag" />
+		<input type="hidden" name="Template" value="tagsearch" />
+		<input type="hidden" name="sort_by" value="entry_count" />
+
+		<h3>Search terms</h3>
+		<p>
+			<input type="radio" name="searchall" value="1" onchange="setsearch(this)" checked />Search all tags<br />
+			<input type="radio" name="searchall" value="0" onchange="setsearch(this)" />Search specific tags
+			<input type="text" name="search" id="searchtxt" size="50" value="(specify a search term to find)"> 
+		</p>
+
+		<h3>Search within categories</h3>
+		<p>
+			<mt:setvar name="options" value=""></mt:setvar>
+			<mt:setvar name="allopts" value=""></mt:setvar>
+			<mt:categories >
+				<mt:setvarblock name="options" append="1">
+					<option value="<mt:CategoryBaseName>"><mt:CategoryLabel></option>
+				</mt:setvarblock>
+
+				<mt:setvarblock name="opt"><mt:CategoryLabel></mt:setvarblock>
+				<mt:var name="allopts" function="push" value="$opt">
+			</mt:categories>
+
+			<select name="category">
+				<option value="<mt:var name="allopts" glue=",">">All</option>
+				<mt:var name="options">
+			</select>
+		</p>
+
+		<input type="submit" value="<MT_TRANS phrase="Find tags">" />
+	</form>
+
+	<hr />
+
+	<h2>Search Results:</h2>
+	<style>
+		body { font-size: 12px; }
+		ul { list-style-type: disc; }
+		.sidebar-tags { margin: 0px; }
+		.sidebar-tags .tag {
+			display: block;
+			float: left;
+		}
+		.sidebar-tags .tag a {
+			background-color: white;
+			border-color: #ABA9A9;
+			border-style: solid;
+			border-width: 1px;
+			color: #2D2D2D;
+			float: left;
+			font-size: x-small;
+			font-weight: bold;
+			list-style-type: none;
+			margin-bottom: 2px;
+			margin-right: 2px;
+			padding: 5px;
+			text-transform: uppercase;
+			text-decoration: none;
+		}
+		.sidebar-tags .tag a:hover { 
+			background-color: #CCDDEE;
+			color: #093D72;
+			outline: none;
+			text-decoration: none;
+		}
+	</style>
+	<ul class="sidebar-tags">
+		<MTSearchResults>
+		<li class="tag">
+			<a href="<mt:TagSearchLink>" title="<mt:TagName> (<mt:TagCount>)">
+				<mt:TagName>
+			</a>
+		</li>
+		</MTSearchResults>
+	</ul>
+
+	<br /><br />
+	<hr />
+
+	<mt:NoSearchResults> No results... </mt:NoSearchResults>
+
+	<mt:NoSearch> No search was executed... </mt:NoSearch>
+
+</body>
+</html>

@@ -1,0 +1,261 @@
+<TMPL_LOOP NAME=SOURCE_LOOP>
+source <TMPL_VAR NAME=INDEX>_source
+{
+	type				= xmlpipe2
+	xmlpipe_command		= cd <TMPL_VAR NAME=MTINSTALLPATH>; perl plugins/SphinxSearch/tools/gen_xpipe_stream --type=main --ds=<TMPL_VAR NAME=INDEX>
+
+	<TMPL_IF NAME=GROUP_LOOP>
+	<TMPL_LOOP NAME=GROUP_LOOP>
+	xmlpipe_attr_uint	= <TMPL_VAR NAME=GROUP_COLUMN>
+	</TMPL_LOOP>
+	</TMPL_IF>
+	<TMPL_IF NAME=STRING_GROUP_LOOP>
+	<TMPL_LOOP NAME=STRING_GROUP_LOOP>
+	xmlpipe_attr_uint	= <TMPL_VAR NAME=STRING_GROUP_COLUMN>_crc32
+	</TMPL_LOOP>
+	</TMPL_IF>
+	<TMPL_IF NAME=DATE_LOOP>
+	<TMPL_LOOP NAME=DATE_LOOP>
+	xmlpipe_attr_timestamp	= <TMPL_VAR NAME=DATE_COLUMN>
+	</TMPL_LOOP>
+	</TMPL_IF>
+	<TMPL_IF NAME=MVA_LOOP>
+	<TMPL_LOOP NAME=MVA_LOOP>
+	xmlpipe_attr_multi	= <TMPL_VAR NAME=MVA_NAME>
+	</TMPL_LOOP>
+	</TMPL_IF>
+	<TMPL_IF NAME=FIELD_LOOP>
+	<TMPL_LOOP NAME=FIELD_LOOP>
+	xmlpipe_field	= <TMPL_VAR NAME=FIELD_COLUMN>
+	</TMPL_LOOP>
+	</TMPL_IF>
+}
+
+index <TMPL_VAR NAME=INDEX>_index
+{
+	source				= <TMPL_VAR NAME=INDEX>_source
+	path				= <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_index
+	html_strip			= 1
+	html_index_attrs	= img=alt,title; a=title;
+	morphology			= <TMPL_VAR NAME=MORPHOLOGY>
+	min_word_len		= <TMPL_VAR NAME=MIN_WORD_LEN>
+	charset_type		= <TMPL_VAR NAME=CHARSET_TYPE>
+}
+
+<TMPL_IF NAME=DELTA_QUERY>
+source <TMPL_VAR NAME=INDEX>_delta_source : <TMPL_VAR NAME=INDEX>_source
+{
+	type				= xmlpipe2
+	xmlpipe_command		= cd <TMPL_VAR NAME=MTINSTALLPATH>; perl plugins/SphinxSearch/tools/gen_xpipe_stream --type=delta --ds=<TMPL_VAR NAME=INDEX>
+}
+
+index <TMPL_VAR NAME=INDEX>_delta_index : <TMPL_VAR NAME=INDEX>_index
+{
+	source				= <TMPL_VAR NAME=INDEX>_delta_source
+	path				= <TMPL_VAR NAME=FILE_PATH>/<TMPL_VAR NAME=INDEX>_delta_index
+}
+</TMPL_IF>
+
+</TMPL_LOOP>
+<TMPL_UNLESS NAME=SOURCE_LOOP>
+#
+# sphinx configuration file sample
+#
+
+#############################################################################
+## data source definition
+#############################################################################
+
+TO BE INSERTED
+
+#############################################################################
+## index definition
+#############################################################################
+
+# local index example
+#
+# this is an index which is stored locally in the filesystem
+# all indexing-time options (such as morphology and charsets) belong to the index
+#index test1
+#{
+	# which document source to index
+	# at least one MUST be defined
+	#
+	# multiple sources may be specified; to do so, just add more
+	# "source = NAME" lines. in this case, ALL the document IDs
+	# in ALL the specified sources MUST be unique
+#	source			= src1
+
+	# this is path and index file name without extension
+	# files <indexpath>.spi/spd/spr will be created by indexer
+	#
+	# .spr is temporary raw log, it can be removed when indexer is done
+	# .spi/.spd are fulltext index files (index index and index data)
+	#
+	# MUST be defined
+#	path			= /var/data/test1
+	# path			= /var/data/test1
+
+	# morphology
+	# default is not to use any
+	#
+	# currently supported morphology preprocessors are Porter stemmers
+	# for English and Russian, and Soundex. more stemmers could be added
+	# at users request.
+	#
+	# morphology		= none
+	# morphology		= stem_en
+	# morphology		= stem_ru
+	# morphology		= stem_enru
+	# morphology		= soundex
+#	morphology			= none
+
+	# stopwords file
+	# format is plain text in whatever encoding you use
+	# optional, default is empty
+	#
+	# stopwords			= /var/data/stopwords.txt
+#	stopwords			=
+
+	# minimum word length
+	# only the words that are of this length and above will be indexed;
+	# for example, if min_word_len is 4, "the" won't be indexed, but "they" will be.
+	# default is 1, which (obviously) means to index everything
+#	min_word_len		= 1
+
+	# charset encoding type
+	# known types are 'sbcs' (Single Byte CharSet) and 'utf-8'
+	# optional, default is sbcs
+#	charset_type		= sbcs
+
+	# charset definition and case folding rules "table"
+	# optional, default value depends on charset_type
+	# for now, defaults are configured to support English and Russian
+	# this behavior MAY change in future versions
+	#
+	# 'sbcs' default value is
+	# charset_table		= 0..9, A..Z->a..z, _, a..z, U+A8->U+B8, U+B8, U+C0..U+DF->U+E0..U+FF, U+E0..U+FF
+	#
+	# 'utf-8' default value is
+	# charset_table		= 0..9, A..Z->a..z, _, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F
+#}
+
+
+# inherited index example
+#
+# all the parameters are copied from the parent index,
+# and may then be overridden in this index definition
+#index test1stemmed : test1
+#{
+#	path			= /var/data/test1stemmed
+#	morphology		= stem_en
+#}
+
+
+# distributed index example
+#
+# this is a virtual index which can NOT be directly indexed,
+# and only containts references to other local and/or remote indexes
+#
+# if searchd receives a query against this index,
+# it does the following:
+#
+# 1) connects to all the specified remote agents,
+# 2) issues the query,
+# 3) searches local indexes (while the remote agents are searching),
+# 4) collects remote search results,
+# 5) merges all the results together (removing the duplicates),
+# 6) sends the merged resuls to client.
+#
+# this index type is primarily intenteded to be able to split huge (100GB+)
+# datasets into chunks placed on different physical servers and them search
+# through those chunks in parallel, reducing response times and server load;
+# it seems, however, that it could also be used to take advantage of
+# multi-processor systems or to implement HA (high-availability) search.
+#index dist1
+#{
+	# 'distributed' index type MUST be specified
+#	type				= distributed
+
+	# local index to be searched
+	# there can be many local indexes configured
+#	local				= test1
+#	local				= test1stemmed
+
+	# remote agent
+	# multiple remote agents may be specified
+	# syntax is 'hostname:port:index1,[index2[,...]]
+#	agent				= localhost:3313:remote1
+#	agent				= localhost:3314:remote2,remote3
+
+	# remote agent connection timeout, milliseconds
+	# optional, default is 1000 ms, ie. 1 sec
+#	agent_connect_timeout	= 1000
+
+	# remote agent query timeout, milliseconds
+	# optional, default is 3000 ms, ie. 3 sec
+#	agent_query_timeout		= 3000
+#}
+
+</TMPL_UNLESS>
+#############################################################################
+## indexer settings
+#############################################################################
+
+indexer
+{
+	# memory limit
+	# can be specified in bytes, kilobytes (mem_limit=1000K) or megabytes (mem_limit=10M)
+	# will grow if set unacceptably low
+	# will warn if set too low, hurting the performance
+	# optional, default is 32M
+	mem_limit			= 32M
+}
+
+#############################################################################
+## searchd settings
+#############################################################################
+
+searchd
+{
+	# port on which search daemon will listen
+	listen				= <TMPL_VAR NAME=SEARCHD_PORT>
+
+
+	# log file
+	# searchd run info is logged here
+	log					= <TMPL_VAR NAME=FILE_PATH>/searchd.log
+
+
+	# query log file
+	# all the search queries are logged here
+	query_log			= <TMPL_VAR NAME=FILE_PATH>/query.log
+
+
+	# client read timeout, seconds
+	read_timeout		= 5
+
+
+	# maximum amount of children to fork
+	# useful to control server load
+	max_children		= 30
+
+
+	# a file which will contain searchd process ID
+	# used for different external automation scripts
+	# MUST be present
+	pid_file			= <TMPL_VAR NAME=PID_PATH>
+
+
+	# maximum amount of matches this daemon would retrieve from each index
+	# and serve to client
+	#
+	# this parameter affects per-client memory usage slightly (16 bytes per match)
+	# and CPU usage in match sorting phase; so blindly raising it to 1 million
+	# is definitely NOT recommended
+	#
+	# default is 1000 (just like with Google)
+	max_matches			= <TMPL_VAR NAME=MAX_MATCHES>
+}
+
+# --eof--

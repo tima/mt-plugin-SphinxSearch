@@ -1,0 +1,36 @@
+::README for SphinxTags::
+
+A complex plugin that relates Tags to Categories. Yes, for some reason we were urged to associate these two entities and return a tag-cloud based on a category.
+
+::Administration::
+1. Verify if Sphinx is actually installed and running correctly on the server
+2. Verify that the SphinxSearch MT plugin is deployed
+3. After installing this plugin to your MT, visit CMS->Settings->Plugins->SphinxSearch
+4. Download latest copy of sphinx.conf and merge with existing if you've made changes to prior sphinx.conf
+5. Run the sphinx indexer with the --rotate option to read the latest data
+6. Test the sphinx indexes for tags by the following command:
+	/path/to/sphinx/search -c /path/to/sphinx/files/sphinx.conf -i tag_index TAG_SEARCH_TERM
+
+
+::Configuration::
+1. Visit your Blog CMS and edit the sidebar widget that renders the tag-cloud
+2. Replace the current tag-cloud lines with the following:
+	
+	<mt:Unless name="datebased_archive">
+	    <mt:IfArchiveType archive_type="Category">
+	       <mt:setvarblock name='cat_name'><mt:ArchiveTitle></mt:setvarblock>
+	    </mt:IfArchiveType>
+	</mt:Unless>
+	<mt:setvarblock name='my_blog'><mt:BlogId></mt:setvarblock>
+	<mt:SphinxTagPool category="$cat_name" blog_ids="$my_blog">
+	
+3. Copy over one of the templates found in this SphinxTags/tmpl/ folder. 
+	tagcloud.tmpl  => renders the simple cloud with some CSS formatting
+	tagsearch.tmpl => simple FORM based tag search
+	(it doesn't harm to copy both)
+4. Edit the mt-config.cgi and add the chosen template from the previous step
+	
+	SearchAltTemplate tagcloud tagcloud.tmpl
+	
+5. Rebuild the Category Archives or the entire site based on where you expect the Tag Clouds to show up.
+6. Sit back, enjoy your blog.
