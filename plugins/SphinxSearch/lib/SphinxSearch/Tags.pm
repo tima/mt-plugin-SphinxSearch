@@ -482,6 +482,7 @@ sub _hdlr_sphinx_tag_pool {
 	my $cats = $args->{category} || '';
 	my $tmpl = $args->{template} || 'tagcloud';
 	my $searchall = $args->{searchall} || '1';
+	my $limit = $args->{searchall} || '10';
 	my $blogs = $args->{include_blogs} || $args->{blog_ids}|| '';
 
 	my $load_jquery = $args->{jquery} || '0';
@@ -503,7 +504,7 @@ sub _hdlr_sphinx_tag_pool {
 	</div>
 	<script type="text/javascript">
 		\$(document).ready(function(){
-			\$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count" },
+			\$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", limit: "$limit" },
 			  function(data){
 			    // alert("Data Loaded: " + data);
 				\$("#$div").html(data);
