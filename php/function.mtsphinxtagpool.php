@@ -14,6 +14,11 @@ function smarty_function_mtsphinxtagpool($args, &$ctx) {
 
 	$cats = $args['category'];
 
+	if( !empty($args['limit']) )
+		$limit = $args['limit'];
+	else
+		$limit = 10;
+
 	if( !empty($args['template']) )
 		$tmpl = $args['template'];
 	else
@@ -57,7 +62,7 @@ function smarty_function_mtsphinxtagpool($args, &$ctx) {
 	</div>
 	<script type="text/javascript">
 	\$(document).ready(function(){
-	        \$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count" },
+	        \$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", limit: "$limit" },
 	          function(data){
 	            // alert("Data Loaded: " + data);
 	                \$("#$div").html(data);
