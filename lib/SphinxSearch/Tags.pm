@@ -482,7 +482,8 @@ sub _hdlr_sphinx_tag_pool {
 	my $cats = $args->{category} || '';
 	my $tmpl = $args->{template} || 'tagcloud';
 	my $searchall = $args->{searchall} || '1';
-	my $limit = $args->{searchall} || '10';
+	my $searchterm = $args->{seachterm} || '';
+	my $loading = $args->{loading} || 'loading...';
 	my $blogs = $args->{include_blogs} || $args->{blog_ids}|| '';
 
 	my $load_jquery = $args->{jquery} || '0';
@@ -491,7 +492,6 @@ sub _hdlr_sphinx_tag_pool {
 	
 	my $app = MT->instance;
 	my $script = $ctx->{config}->SearchScript;
-    
 	my $cgi_path = $app->config('CGIPath');
 	$cgi_path .= '/' unless $cgi_path =~ m!/$!;
 	$cgi_path .= $script;
@@ -500,14 +500,18 @@ sub _hdlr_sphinx_tag_pool {
 
 	$load_jquery
 	<div id="tagpool">
-		<div id="waiting">...</div>
+		<div id="waiting">$loading</div>
 	</div>
 	<script type="text/javascript">
 		\$(document).ready(function(){
-			\$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", limit: "$limit" },
+			\$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", search: "$searchterm" },
 			  function(data){
 			    // alert("Data Loaded: " + data);
 				\$("#$div").html(data);
+				// Fix the category argument in the Tag search URL
+				jQuery.each(\$("#tagpool a"), function(i, val) {
+					this.href = this.href + '&category=$cats';
+				});
 			  });
 		});
 	</script>
