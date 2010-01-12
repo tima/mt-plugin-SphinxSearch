@@ -14,11 +14,6 @@ function smarty_function_mtsphinxtagpool($args, &$ctx) {
 
 	$cats = $args['category'];
 
-	if( !empty($args['limit']) )
-		$limit = $args['limit'];
-	else
-		$limit = 10;
-
 	if( !empty($args['template']) )
 		$tmpl = $args['template'];
 	else
@@ -28,6 +23,16 @@ function smarty_function_mtsphinxtagpool($args, &$ctx) {
 		$searchall = $args['searchall'];
 	else
 		$searchall = '1';
+
+	if( !empty($args['searchterm']) )
+		$searchterm = $args['searchterm'];
+	else
+		$searchterm = '';
+
+	if( !empty($args['loading']) )
+		$loading = $args['loading'];
+	else
+		$loading = 'loading...';
 
 	if( !empty($args['include_blogs']) )
 		$blogs = $args['include_blogs'];
@@ -58,14 +63,18 @@ function smarty_function_mtsphinxtagpool($args, &$ctx) {
 
 	$load_jquery
 	<div id="tagpool">
-	<div id="waiting">...</div>
+	<div id="waiting">$loading</div>
 	</div>
 	<script type="text/javascript">
 	\$(document).ready(function(){
-	        \$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", limit: "$limit" },
+	        \$.get("$cgi_path", { IncludeBlogs: "$blogs", index: "tag", Template: "$tmpl", searchall: "$searchall", category: "$cats", sort_by: "entry_count", search: "$searchterm" },
 	          function(data){
-	            // alert("Data Loaded: " + data);
-	                \$("#$div").html(data);
+            	// alert("Data Loaded: " + data);
+                \$("#$div").html(data);
+				// Fix the category argument in the Tag search URL
+				jQuery.each(\$("#tagpool a"), function(i, val) {
+					this.href = this.href + '&category=$cats';
+				});
 	          });
 	});
 	</script>
