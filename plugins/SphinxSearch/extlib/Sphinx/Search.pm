@@ -576,7 +576,7 @@ sub _Connect {
     }
     binmode( $fp, ':bytes' );
     if ( $self->{_read_timeout} ) {
-        my $to = pack( 'qq', $self->{_read_timeout}, 0 );
+        my $to = pack( 'll', $self->{_read_timeout}, 0 );
         $fp->sockopt( SO_RCVTIMEO, $to );
     }
 
