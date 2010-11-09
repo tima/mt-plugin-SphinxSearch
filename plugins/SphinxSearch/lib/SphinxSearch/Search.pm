@@ -122,7 +122,8 @@ sub _get_sphinx_results {
     }
 
     my @blog_ids      = keys %{ $app->{searchparam}{IncludeBlogs} };
-    my $filters       = { blog_id => \@blog_ids, };
+    my $filters       = { blog_id => \@blog_ids, }
+      unless $app->param('index') =~ /^(author|user|member)/i;
     my $filter_stash  = {};
     my $range_filters = {};
     my $vars          = {};
